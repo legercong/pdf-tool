@@ -44,6 +44,13 @@
 
 ## 安装与运行
 
+本项目只发源码，不出安装包。拿代码：仓库页绿色 `Code` → `Download ZIP`，或者下某个版本标签的源码包
+（例如 [v4.1.0](https://github.com/legercong/pdf-tool/archive/refs/tags/v4.1.0.zip)）；也可以用 git：
+
+```bash
+git clone https://github.com/legercong/pdf-tool.git
+```
+
 需要 Python 3.10+（带 Tkinter），依赖全部列在 `requirements.txt`：
 
 ```bash
