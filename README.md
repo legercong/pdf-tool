@@ -1,5 +1,9 @@
 # PDF Tool
 
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+![Python](https://img.shields.io/badge/python-3.10%2B-green)
+![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+
 批量处理公文体 PDF 的桌面小工具（Tkinter + PyMuPDF）。一次拖进几十本，勾上功能就整批跑完，
 **电子签章（金格 GoldGrid 这类 /FT/Sig 表单控件）原样保留** —— 这是它存在的理由。
 
@@ -67,3 +71,8 @@ Windows 上想不开控制台窗口就用 `pythonw main.py`。拖拽进窗口需
 ## 隐私
 
 仓库里只有代码：客户 PDF、`backup/` 原件快照、诊断输出和截图全部在 `.gitignore` 里，不会进版本库。
+
+## 许可
+
+Apache License 2.0（见 [LICENSE](LICENSE)）。可以自用、改、商用、再分发，但要保留版权声明和这份许可文本，
+改动过的文件最好注明；工具本身不提供任何担保。**公文体处理涉及具体单位的签章流程，拿去用之前自己拿真件跑一遍验证。**
