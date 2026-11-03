@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.log
+
+# 客户文件与本机密存数据：一律不进仓库
+*.pdf
+*.PDF
+backup/
+_bak/
+_logo_crops/
+_diag_scale_test/
+_fit/
+_gui/
+_tmp_f4/
+diag_step*_output/
+diag_test_output/
+*.png
+!pdf_page_remover/icon.png
+
+# 别的编辑器留下的工程目录
+.joycode/
