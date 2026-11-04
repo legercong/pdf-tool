@@ -44,7 +44,7 @@
 
 ## 安装与运行
 
-本项目只发源码，不出安装包。拿代码：仓库页绿色 `Code` → `Download ZIP`，或者下某个版本标签的源码包
+拿代码：仓库页绿色 `Code` → `Download ZIP`，或者下某个版本标签的源码包
 （例如 [v4.1.0](https://github.com/legercong/pdf-tool/archive/refs/tags/v4.1.0.zip)）；也可以用 git：
 
 ```bash
@@ -62,6 +62,40 @@ Windows 上想不开控制台窗口就用 `pythonw main.py`。拖拽进窗口需
 
 界面选项存在 `%APPDATA%/PDF Tool/settings.json`，下次启动接着用（文件列表和页面范围故意不记住，避免误处理上一批）。
 
+## 打包发布（目标机不装 Python）
+
+仓库带了 PyInstaller 配置，一条命令出免安装的文件夹版：
+
+```bash
+pip install pyinstaller
+pyinstaller PDF-Tool.spec --noconfirm --distpath dist --workpath build
+```
+
+产物是 `dist/PDF Tool/`（约 190MB，压成 zip 约 80MB）：里面 `PDF Tool.exe` 加 `_internal/` 是完整的程序，
+**分发必须整个文件夹一起给**，只拷 exe 打不开。目标机要求 Windows 10/11 64 位。
+`使用说明.txt` 由 `packaging/使用说明.txt` 在构建末尾复制到 exe 同级，改说明改那个文件。
+
+冻结后有两处路径跟着变，都在 `gui._app_home()` 里：`backup/` 落在 exe 同级而不是源码目录，
+开始菜单/桌面快捷方式直接指向 exe（不再绕 `pythonw main.py`）。
+
+`PDF-Tool.spec` 里排掉了两类东西，包体从 354MB 降到 191MB，功能不受影响：
+
+- `pandas`/`numba`/`llvmlite` 及其连带（约 150MB）：`pymupdf.table` 的 `to_pandas()` 里是
+  `try: import pandas`，本工具不做表格导出，用不到；
+- OpenCV 的视频解码插件和人脸级联数据（约 70MB）：只用图像算子，不读视频。
+
+打完先自检再发人：
+
+```bash
+pyinstaller _smoke.spec --noconfirm --distpath dist --workpath build
+dist\smoke\smoke.exe "某个真件.pdf"
+```
+
+冒烟包和主包用同一套收集/排除配置，只是入口换成 `_frozen_smoke.py` 且留着控制台。
+它会在冻结环境里真跑一遍去页码、改尺寸、内容缩放、去Logo，并检查页数不变、图片（含章）数量不变、
+文字层还在、拖拽组件起得来。全绿才算打包成功。
+
+
 ## 回归检查
 
 这个工具的失败方式很讨厌：不报错，只是成品"少了东西"（章没了、书签没了、少交了本）。
@@ -71,6 +105,9 @@ Windows 上想不开控制台窗口就用 `pythonw main.py`。拖拽进窗口需
 - 四条重建路径保住书签与文件属性；
 - 组合处理里"这一步没活干"的书照样交付；
 - 界面排版在 920×1050 窗口里不裁切。
+
+打包相关的两个是通用的，可以跟着改一起跑：`_verify_frozen_paths.py`（拦截 PowerShell，验冻结/源码两个分支的
+快捷方式目标和 `backup/` 落点）、`_frozen_smoke.py`（配合 `_smoke.spec`，见上一节）。
 
 这些探针里写死了本机样本路径和客户文件名，没有随仓库发布；要收进来得先把路径抽成配置。
 

@@ -20,3 +20,9 @@ diag_test_output/
 
 # 别的编辑器留下的工程目录
 .joycode/
+
+# PyInstaller 产物与构建日志（要发给别人的包不入库）
+dist/
+build/
+build_log.txt
+smoke_build_log.txt

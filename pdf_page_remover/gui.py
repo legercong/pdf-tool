@@ -53,6 +53,13 @@ SETTINGS_DIR_NAME = "PDF Tool"
 SETTINGS_FILE_NAME = "settings.json"
 
 
+def _app_home() -> str:
+    """应用自己的目录：打包后是可执行文件所在处，源码运行时是项目根目录"""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 def _settings_path() -> str:
     """设置文件位置：%APPDATA%\\PDF Tool\\settings.json，没有 APPDATA 就放主目录"""
     base = os.environ.get("APPDATA") or os.path.expanduser("~")
@@ -3684,8 +3691,8 @@ class PDFPageNumberRemoverGUI:
         return os.path.join(output_dir, f"{stem}{ext}")
 
     def _backup_dir(self) -> Optional[str]:
-        """项目根目录下的 backup/：存最初的原文件，供反复生成后回退"""
-        backup_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backup")
+        """应用目录下的 backup/：存最初的原文件，供反复生成后回退"""
+        backup_dir = os.path.join(_app_home(), "backup")
         try:
             os.makedirs(backup_dir, exist_ok=True)
         except OSError:
@@ -4392,7 +4399,10 @@ def _create_shortcut(shortcut_path, target, arguments, work_dir, icon_path, desc
         "$ws = New-Object -ComObject WScript.Shell; "
         f"$sc = $ws.CreateShortcut('{shortcut_path}'); "
         f"$sc.TargetPath = '{target}'; "
-        f'$sc.Arguments = \'"\' + \'{arguments}\' + \'"\'; '
+    )
+    if arguments:
+        ps_cmd += f'$sc.Arguments = \'"\' + \'{arguments}\' + \'"\'; '
+    ps_cmd += (
         f"$sc.WorkingDirectory = '{work_dir}'; "
         f"$sc.Description = '{description}'; "
     )
@@ -4417,26 +4427,32 @@ def _create_start_menu_shortcut():
         appdata = os.environ.get('APPDATA', '')
         if not appdata:
             return
-        # 获取pythonw.exe路径（无控制台窗口）
-        pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
-        if not os.path.exists(pythonw):
-            pythonw = sys.executable
-        # 获取启动脚本路径（优先main.py）
-        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'main.py')
-        script_path = os.path.normpath(script_path)
-        # 获取图标路径
-        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'icon.ico')
-        icon_path = os.path.normpath(icon_path)
-        work_dir = os.path.dirname(script_path)
+        if getattr(sys, 'frozen', False):
+            # 打包后：直接指向可执行文件，图标用程序自身内嵌的
+            target = sys.executable
+            script_path = ''
+            icon_path = sys.executable
+            work_dir = os.path.dirname(target)
+        else:
+            # 源码运行：用pythonw.exe起main.py，避免弹出控制台窗口
+            pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
+            if not os.path.exists(pythonw):
+                pythonw = sys.executable
+            target = pythonw
+            script_path = os.path.normpath(
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'main.py'))
+            icon_path = os.path.normpath(
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), 'icon.ico'))
+            work_dir = os.path.dirname(script_path)
         desc = 'PDF Tool - PDF页面处理工具'
         # 创建/更新开始菜单快捷方式
         start_menu_dir = os.path.join(appdata, 'Microsoft', 'Windows', 'Start Menu', 'Programs')
         start_menu_lnk = os.path.join(start_menu_dir, 'PDF Tool.lnk')
-        _create_shortcut(start_menu_lnk, pythonw, script_path, work_dir, icon_path, desc)
+        _create_shortcut(start_menu_lnk, target, script_path, work_dir, icon_path, desc)
         # 创建/更新桌面快捷方式
         desktop_dir = os.path.join(os.path.expanduser('~'), 'Desktop')
         desktop_lnk = os.path.join(desktop_dir, 'PDF Tool.lnk')
-        _create_shortcut(desktop_lnk, pythonw, script_path, work_dir, icon_path, desc)
+        _create_shortcut(desktop_lnk, target, script_path, work_dir, icon_path, desc)
     except Exception as e:
         logging.debug(f"创建快捷方式失败（非致命）: {e}")
 
