@@ -45,7 +45,7 @@
 ## 安装与运行
 
 拿代码：仓库页绿色 `Code` → `Download ZIP`，或者下某个版本标签的源码包
-（例如 [v4.1.0](https://github.com/legercong/pdf-tool/archive/refs/tags/v4.1.0.zip)）；也可以用 git：
+（例如 [v4.2.0](https://github.com/legercong/pdf-tool/archive/refs/tags/v4.2.0.zip)）；也可以用 git：
 
 ```bash
 git clone https://github.com/legercong/pdf-tool.git
@@ -63,6 +63,9 @@ Windows 上想不开控制台窗口就用 `pythonw main.py`。拖拽进窗口需
 界面选项存在 `%APPDATA%/PDF Tool/settings.json`，下次启动接着用（文件列表和页面范围故意不记住，避免误处理上一批）。
 
 ## 打包发布（目标机不装 Python）
+
+不想折腾环境的，直接下 Release 里附带的 `PDF Tool 便携版 v4.2.0.zip`，解压双击 `PDF Tool.exe` 就能用
+（Windows 10/11 64 位，第一次打开要在 SmartScreen 上点「更多信息 → 仍要运行」）。下面是怎么自己从源码打一份。
 
 仓库带了 PyInstaller 配置，一条命令出免安装的文件夹版：
 
