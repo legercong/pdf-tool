@@ -64,7 +64,7 @@ Windows 上想不开控制台窗口就用 `pythonw main.py`。拖拽进窗口需
 
 ## 打包发布（目标机不装 Python）
 
-不想折腾环境的，直接下 Release 里附带的 `PDF Tool 便携版 v4.2.0.zip`，解压双击 `PDF Tool.exe` 就能用
+不想折腾环境的，直接下 [v4.2.0 Release](https://github.com/legercong/pdf-tool/releases/tag/v4.2.0) 里附带的 `PDF-Tool-4.2.0-portable.zip`，解压双击 `PDF Tool.exe` 就能用
 （Windows 10/11 64 位，第一次打开要在 SmartScreen 上点「更多信息 → 仍要运行」）。下面是怎么自己从源码打一份。
 
 仓库带了 PyInstaller 配置，一条命令出免安装的文件夹版：
