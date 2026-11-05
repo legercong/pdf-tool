@@ -25,7 +25,7 @@ except ImportError:
     HAS_DND = False
 
 import pymupdf
-from PIL import Image
+from PIL import Image, ImageDraw, ImageTk
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -176,6 +176,48 @@ class ToolTip:
             self._win = win
         except tk.TclError:
             self._win = None
+
+
+_CHECK_BOX_IMAGES = {}
+
+
+def _check_box_images(master):
+    """勾选框的两张图：没勾=深色空框，勾上=蓝色实心方块里一个白 √。
+
+    Tk 自己的指示器在深色主题下勾与不勾都画成一小块蓝，看不出状态；用字符 ☐/☑ 又没有
+    "方块被填满"的感觉。所以按屏幕缩放画两张方块图，交给 Checkbutton 的 image/selectimage 换。
+    画的时候放大四倍再缩回来，√ 的斜边才不毛。
+
+    PhotoImage 是绑在创建它的那个 Tk 解释器上的：缓存必须按解释器分开存，否则测试里
+    关掉一个窗口再开一个，会拿到上一世的图，报 image "pyimage1" doesn't exist。
+    """
+    side = ui_dpi.S(16)
+    key = (id(master.tk), side)
+    if key in _CHECK_BOX_IMAGES:
+        return _CHECK_BOX_IMAGES[key]
+
+    ss = 4
+    n = side * ss
+    edge = max(ss, int(n * 0.075))          # 空框的描边
+    stroke = max(2 * ss, int(n * 0.14))      # √ 的粗细
+
+    off = Image.new("RGB", (n, n), Theme.BG_INPUT)
+    d = ImageDraw.Draw(off)
+    d.rectangle((edge // 2, edge // 2, n - 1 - edge // 2, n - 1 - edge // 2),
+                outline=Theme.BORDER, width=edge)
+
+    on = Image.new("RGB", (n, n), Theme.ACCENT)
+    d = ImageDraw.Draw(on)
+    pts = [(0.24 * n, 0.53 * n), (0.43 * n, 0.72 * n), (0.78 * n, 0.30 * n)]
+    d.line(pts, fill="#ffffff", width=stroke, joint="curve")
+    for px, py in pts:                       # 端点补圆，尖角不会被缩采样削掉
+        d.ellipse((px - stroke / 2, py - stroke / 2, px + stroke / 2, py + stroke / 2),
+                  fill="#ffffff")
+
+    pair = (ImageTk.PhotoImage(off.resize((side, side), Image.LANCZOS), master=master),
+            ImageTk.PhotoImage(on.resize((side, side), Image.LANCZOS), master=master))
+    _CHECK_BOX_IMAGES[key] = pair
+    return pair
 
 
 def _window_size(base_w: int, base_h: int, floor_w: int = 640, floor_h: int = 520):
@@ -1979,32 +2021,20 @@ class PDFPageNumberRemoverGUI:
             w._choice_command()
 
     def _make_check(self, parent, text, variable, command=None, wraplength=0):
-        """统一的布尔开关：没勾是空心黑框，勾上是蓝色方框带 √。
+        """统一的布尔开关：没勾是深色空框，勾上是蓝色方块带白 √，文字颜色一律不动。
 
-        Tk 的原生指示器在深色底上两种状态都画成一小块蓝，看不出勾没勾（用户提过这个）。
-        所以关掉指示器，方框和勾用 ☐/☑ 字符画在文字前面，颜色跟着状态走。
+        selectcolor 必须显式设成卡片底色：Tk 在 indicatoron=0 时把 selectcolor 当作
+        "勾选后整个按钮的底色"，用默认值的话一勾上，这行字就变成白底浅灰字，直接看不见。
         """
-        box = tk.Checkbutton(parent, text="☐ " + text, variable=variable, command=command,
-                             bg=Theme.BG_CARD, fg=Theme.FG,
-                             selectcolor=Theme.BG_CARD,
-                             activebackground=Theme.BG_CARD,
-                             activeforeground=Theme.ACCENT_HOVER,
-                             font=F(10), cursor="hand2",
-                             highlightthickness=0, anchor=tk.W, pady=S(2),
-                             indicatoron=False, relief="flat", bd=0, padx=0,
-                             wraplength=wraplength)
-
-        def repaint(*_a):
-            try:
-                on = bool(variable.get())
-                box.configure(text=("☑ " if on else "☐ ") + text,
-                              fg=Theme.ACCENT if on else Theme.FG)
-            except tk.TclError:
-                pass    # 控件已经销毁，追踪还会响最后一次，忽略
-
-        variable.trace_add("write", repaint)
-        repaint()
-        return box
+        img_off, img_on = _check_box_images(parent)
+        return tk.Checkbutton(parent, text=text, variable=variable, command=command,
+                              bg=Theme.BG_CARD, fg=Theme.FG, selectcolor=Theme.BG_CARD,
+                              image=img_off, selectimage=img_on, compound=tk.LEFT,
+                              activebackground=Theme.BG_CARD, activeforeground=Theme.FG,
+                              font=F(10), cursor="hand2",
+                              highlightthickness=0, anchor=tk.W, pady=S(2), padx=0,
+                              indicatoron=False, relief="flat", bd=0,
+                              wraplength=wraplength)
 
     def _update_scale_mode_hint(self):
         """缩放方式下方的说明文字"""
