@@ -357,7 +357,7 @@ class PDFPageNumberRemoverGUI:
         self._tray_icon = None
         self._setup_tray_icon()
 
-        # 窗口关闭时隐藏到托盘而非退出
+        # 窗口关闭：问一句"退出还是收进托盘"（见 _on_window_close）
         self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
         _setup_styles(root)
