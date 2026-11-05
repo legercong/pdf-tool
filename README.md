@@ -60,6 +60,12 @@
 打包版由 `_frozen_smoke.py` 里的「界面缩放」一项把关（确认可执行文件里 awareness 也生效）。
 如果还是觉得小字发虚，跑一次 Windows 自带的 ClearType 调谐器（`Win+R` → `cttune`），深色主题下的子像素渲染会跟着调好。
 
+勾选框不用 Tk 原生指示器（深色主题下勾与不勾都画成一小块蓝，看不出状态），而是用 PIL 画两张方块图交给
+`Checkbutton` 的 `image`/`selectimage` 换：**没勾是深色空框，勾上是蓝色填满的方块里留一个白 √，文字颜色两种状态不动**。
+两个坑记在这儿：`indicatoron=0` 时 Tk 把 `selectcolor` 当成"勾选后整个按钮的底色"，不显式设成卡片色就会
+一勾上变白底、浅灰字直接看不见；`PhotoImage` 绑在创建它的 Tk 解释器上，缓存要按解释器分开存。
+自检：`python _probe_checkbox.py` 截屏取色断言（蓝块占比、白 √ 像素、两种状态字色完全一致、点一下图真的换）。
+
 ## 点关闭按钮到底退不退出
 
 以前点 X 一律收进系统托盘，用户以为程序已经关了，下次双击又起一个，任务栏里能攒出好几个小图标。
@@ -75,7 +81,7 @@
 ## 安装与运行
 
 拿代码：仓库页绿色 `Code` → `Download ZIP`，或者下某个版本标签的源码包
-（例如 [v4.2.1](https://github.com/legercong/pdf-tool/archive/refs/tags/v4.2.1.zip)）；也可以用 git：
+（例如 [v4.2.2](https://github.com/legercong/pdf-tool/archive/refs/tags/v4.2.2.zip)）；也可以用 git：
 
 ```bash
 git clone https://github.com/legercong/pdf-tool.git
@@ -94,7 +100,7 @@ Windows 上想不开控制台窗口就用 `pythonw main.py`。拖拽进窗口需
 
 ## 打包发布（目标机不装 Python）
 
-不想折腾环境的，直接下 [v4.2.1 Release](https://github.com/legercong/pdf-tool/releases/tag/v4.2.1) 里附带的 `PDF-Tool-4.2.1-portable.zip`，解压双击 `PDF Tool.exe` 就能用
+不想折腾环境的，直接下 [v4.2.2 Release](https://github.com/legercong/pdf-tool/releases/tag/v4.2.2) 里附带的 `PDF-Tool-4.2.2-portable.zip`，解压双击 `PDF Tool.exe` 就能用
 （Windows 10/11 64 位，第一次打开要在 SmartScreen 上点「更多信息 → 仍要运行」）。下面是怎么自己从源码打一份。
 
 仓库带了 PyInstaller 配置，一条命令出免安装的文件夹版：
