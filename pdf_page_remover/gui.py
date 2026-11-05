@@ -1978,15 +1978,33 @@ class PDFPageNumberRemoverGUI:
         if w._choice_command:
             w._choice_command()
 
-    def _make_check(self, parent, text, variable, command=None):
-        """统一的布尔开关"""
-        return tk.Checkbutton(parent, text=text, variable=variable, command=command,
-                              bg=Theme.BG_CARD, fg=Theme.FG,
-                              selectcolor=Theme.ACCENT,
-                              activebackground=Theme.BG_CARD,
-                              activeforeground=Theme.ACCENT,
-                              font=F(10), cursor="hand2",
-                              highlightthickness=0, anchor=tk.W, pady=S(2))
+    def _make_check(self, parent, text, variable, command=None, wraplength=0):
+        """统一的布尔开关：没勾是空心黑框，勾上是蓝色方框带 √。
+
+        Tk 的原生指示器在深色底上两种状态都画成一小块蓝，看不出勾没勾（用户提过这个）。
+        所以关掉指示器，方框和勾用 ☐/☑ 字符画在文字前面，颜色跟着状态走。
+        """
+        box = tk.Checkbutton(parent, text="☐ " + text, variable=variable, command=command,
+                             bg=Theme.BG_CARD, fg=Theme.FG,
+                             selectcolor=Theme.BG_CARD,
+                             activebackground=Theme.BG_CARD,
+                             activeforeground=Theme.ACCENT_HOVER,
+                             font=F(10), cursor="hand2",
+                             highlightthickness=0, anchor=tk.W, pady=S(2),
+                             indicatoron=False, relief="flat", bd=0, padx=0,
+                             wraplength=wraplength)
+
+        def repaint(*_a):
+            try:
+                on = bool(variable.get())
+                box.configure(text=("☑ " if on else "☐ ") + text,
+                              fg=Theme.ACCENT if on else Theme.FG)
+            except tk.TclError:
+                pass    # 控件已经销毁，追踪还会响最后一次，忽略
+
+        variable.trace_add("write", repaint)
+        repaint()
+        return box
 
     def _update_scale_mode_hint(self):
         """缩放方式下方的说明文字"""
@@ -2275,6 +2293,8 @@ class PDFPageNumberRemoverGUI:
         top.configure(bg=Theme.BG_CARD)
         top.resizable(False, False)
         top.transient(self.root)
+        # 主窗口可能被别的程序压在下面，询问框必须压在所有人上面，否则用户只会觉得"点了没反应"
+        top.attributes("-topmost", True)
 
         picked = tk.StringVar(value=self.close_action_var.get() or "quit")
         remember = tk.BooleanVar(value=False)
@@ -2293,13 +2313,7 @@ class PDFPageNumberRemoverGUI:
         tk.Label(top, text=self.CLOSE_TRAY_HINT, bg=Theme.BG_CARD, fg=Theme.FG_DIM,
                  font=F(9), justify=tk.LEFT).pack(anchor=tk.W, padx=S(32), pady=(S(2), S(6)))
 
-        cb_remember = tk.Checkbutton(top, text=self.CLOSE_REMEMBER, variable=remember,
-                                     bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                     selectcolor=Theme.ACCENT,
-                                     activebackground=Theme.BG_CARD,
-                                     activeforeground=Theme.ACCENT,
-                                     font=F(9), justify=tk.LEFT, anchor=tk.W,
-                                     cursor="hand2", highlightthickness=0, wraplength=S(400))
+        cb_remember = self._make_check(top, self.CLOSE_REMEMBER, remember, wraplength=S(400))
         cb_remember.pack(anchor=tk.W, padx=S(18), pady=(S(6), S(12)))
 
         btns = tk.Frame(top, bg=Theme.BG_CARD)
