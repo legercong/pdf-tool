@@ -75,7 +75,7 @@
 ## 安装与运行
 
 拿代码：仓库页绿色 `Code` → `Download ZIP`，或者下某个版本标签的源码包
-（例如 [v4.2.0](https://github.com/legercong/pdf-tool/archive/refs/tags/v4.2.0.zip)）；也可以用 git：
+（例如 [v4.2.1](https://github.com/legercong/pdf-tool/archive/refs/tags/v4.2.1.zip)）；也可以用 git：
 
 ```bash
 git clone https://github.com/legercong/pdf-tool.git
@@ -94,7 +94,7 @@ Windows 上想不开控制台窗口就用 `pythonw main.py`。拖拽进窗口需
 
 ## 打包发布（目标机不装 Python）
 
-不想折腾环境的，直接下 [v4.2.0 Release](https://github.com/legercong/pdf-tool/releases/tag/v4.2.0) 里附带的 `PDF-Tool-4.2.0-portable.zip`，解压双击 `PDF Tool.exe` 就能用
+不想折腾环境的，直接下 [v4.2.1 Release](https://github.com/legercong/pdf-tool/releases/tag/v4.2.1) 里附带的 `PDF-Tool-4.2.1-portable.zip`，解压双击 `PDF Tool.exe` 就能用
 （Windows 10/11 64 位，第一次打开要在 SmartScreen 上点「更多信息 → 仍要运行」）。下面是怎么自己从源码打一份。
 
 仓库带了 PyInstaller 配置，一条命令出免安装的文件夹版：
@@ -127,6 +127,9 @@ dist\smoke\smoke.exe "某个真件.pdf"
 冒烟包和主包用同一套收集/排除配置，只是入口换成 `_frozen_smoke.py` 且留着控制台。
 它会在冻结环境里真跑一遍去页码、改尺寸、内容缩放、去Logo，并检查页数不变、图片（含章）数量不变、
 文字层还在、拖拽组件起得来。全绿才算打包成功。
+
+压 zip 用 `_make_portable_zip.ps1`，别用 `tar -a -c -f`：Windows 上的 tar 会把 `使用说明.txt`
+按 GBK 写进条目名又不置 UTF-8 标志，对方解压出来是乱码文件名。
 
 
 ## 回归检查
