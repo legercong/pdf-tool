@@ -37,6 +37,9 @@ from pdf_page_remover.scaler import (batch_fit_margins, DEFAULT_SMALL_CONTENT_RA
                                      FitSpec)
 from pdf_page_remover.scan_cleaner import batch_clean_scan
 from pdf_page_remover.logo_remover import LogoConfig, batch_remove_logos
+from pdf_page_remover import ui_dpi
+# 界面里所有字号和像素间距都过 F()/S()/mono()，见 ui_dpi 的说明
+from pdf_page_remover.ui_dpi import F, S, mono
 
 
 # ============ 输出目录 ============
@@ -158,9 +161,9 @@ class ToolTip:
             win.wm_overrideredirect(True)
             win.wm_attributes("-topmost", True)
             tk.Label(win, text=self.text, justify=tk.LEFT, bg=Theme.TIP_BG, fg=Theme.FG,
-                     font=("Segoe UI", 9), relief="solid", bd=1,
+                     font=F(9), relief="solid", bd=1,
                      highlightbackground=Theme.BORDER, highlightthickness=1,
-                     padx=10, pady=7).pack()
+                     padx=S(10), pady=S(7)).pack()
             win.update_idletasks()
             x = self.widget.winfo_pointerx() + 14
             y = self.widget.winfo_pointery() + 20
@@ -173,6 +176,34 @@ class ToolTip:
             self._win = win
         except tk.TclError:
             self._win = None
+
+
+def _window_size(base_w: int, base_h: int, floor_w: int = 640, floor_h: int = 520):
+    """按当前缩放换算窗口尺寸，并封顶在任务栏以外的可用区域里。
+
+    基准 920x1050 是在 2K 屏上定的，1080p 的可用高度只有 1040——不封顶的话窗口底部
+    被任务栏切掉一截，正好切在日志区。缩放后同理，超出的部分靠内容区滚动消化。
+    """
+    w, h = ui_dpi.S(base_w), ui_dpi.S(base_h)
+    aw, ah = ui_dpi.work_area()
+    if aw:
+        w = min(w, aw - ui_dpi.S(24))
+        h = min(h, ah - ui_dpi.S(24))
+    return max(ui_dpi.S(floor_w), w), max(ui_dpi.S(floor_h), h)
+
+
+def _preview_size(landscape: bool):
+    """预览画布尺寸：按缩放放大，但不超过可用屏幕的 34% 宽 / 60% 高。
+
+    150% 缩放的笔记本上，预览再按 1.5 倍长就会把左边的设置卡片挤出窗口——宁可预览小一点。
+    """
+    base_w, base_h = (560, 400) if landscape else (400, 560)
+    w, h = ui_dpi.S(base_w), ui_dpi.S(base_h)
+    aw, ah = ui_dpi.work_area()
+    if aw:
+        w = min(w, int(aw * 0.34))
+        h = min(h, int(ah * 0.60))
+    return max(ui_dpi.S(240), w), max(ui_dpi.S(240), h)
 
 
 def _setup_styles(root: tk.Tk):
@@ -210,16 +241,16 @@ def _setup_styles(root: tk.Tk):
         root.option_add(opt, color)
 
     # 标签
-    style.configure("TLabel", background=Theme.BG, foreground=Theme.FG, font=("Segoe UI", 10))
-    style.configure("CardLabel.TLabel", background=Theme.BG_CARD, foreground=Theme.FG, font=("Segoe UI", 10))
-    style.configure("Title.TLabel", background=Theme.BG, foreground=Theme.ACCENT, font=("Segoe UI", 16, "bold"))
-    style.configure("Subtitle.TLabel", background=Theme.BG, foreground=Theme.FG_DIM, font=("Segoe UI", 10))
+    style.configure("TLabel", background=Theme.BG, foreground=Theme.FG, font=F(10))
+    style.configure("CardLabel.TLabel", background=Theme.BG_CARD, foreground=Theme.FG, font=F(10))
+    style.configure("Title.TLabel", background=Theme.BG, foreground=Theme.ACCENT, font=F(16, "bold"))
+    style.configure("Subtitle.TLabel", background=Theme.BG, foreground=Theme.FG_DIM, font=F(10))
 
     # 按钮 - 主按钮
     style.configure("Accent.TButton",
                     background=Theme.ACCENT,
                     foreground="white",
-                    font=("Segoe UI", 10, "bold"),
+                    font=F(10, "bold"),
                     padding=(16, 6))
     style.map("Accent.TButton",
               background=[("active", Theme.ACCENT_HOVER), ("disabled", Theme.BORDER)],
@@ -229,7 +260,7 @@ def _setup_styles(root: tk.Tk):
     style.configure("Secondary.TButton",
                     background=Theme.BG_CARD,
                     foreground=Theme.FG,
-                    font=("Segoe UI", 10),
+                    font=F(10),
                     padding=(12, 5))
     style.map("Secondary.TButton",
               background=[("active", Theme.BORDER)])
@@ -238,16 +269,16 @@ def _setup_styles(root: tk.Tk):
     style.configure("Danger.TButton",
                     background=Theme.ERROR,
                     foreground="white",
-                    font=("Segoe UI", 10, "bold"),
+                    font=F(10, "bold"),
                     padding=(12, 5))
     style.map("Danger.TButton",
               background=[("active", "#ff6b8a")])
 
     # 单选框
-    style.configure("TRadiobutton", background=Theme.BG, foreground=Theme.FG, font=("Segoe UI", 10))
+    style.configure("TRadiobutton", background=Theme.BG, foreground=Theme.FG, font=F(10))
 
     # 检查框
-    style.configure("TCheckbutton", background=Theme.BG, foreground=Theme.FG, font=("Segoe UI", 10))
+    style.configure("TCheckbutton", background=Theme.BG, foreground=Theme.FG, font=F(10))
 
     # 进度条
     style.configure("TProgressbar",
@@ -283,6 +314,7 @@ class PDFPageNumberRemoverGUI:
         "replace_source_var", "mode_var", "settings_expanded",
         "bottom_ratio_var", "top_ratio_var", "dpi_var",
         "check_side_var", "check_seal_var",
+        "close_ask_var", "close_action_var",
         "scale_mode_var", "scale_ratio_var", "offset_x_var", "offset_y_var",
         "fit_top_var", "fit_bottom_var", "fit_mode_var", "fit_side_var",
         "fit_side_cm_var", "fit_pre_var", "fit_auto_skip_var", "fit_small_var",
@@ -293,10 +325,12 @@ class PDFPageNumberRemoverGUI:
 
     def __init__(self, root: tk.Tk):
         self.root = root
+        # 先量屏幕再摆控件：字号和间距都按这里的缩放换算（_gui_shot 之类的入口也走这条）
+        ui_dpi.init(root)
         self.root.configure(bg=Theme.BG)
         self.root.title("PDF Tool - 去页码 · 改比例 · 改尺寸 · 旋转 · 去瑕疵 · 去页眉Logo")
-        self.root.geometry("920x1050")
-        self.root.minsize(780, 850)
+        self.root.geometry("%dx%d" % _window_size(920, 1050))
+        self.root.minsize(*_window_size(780, 850, floor_w=560, floor_h=460))
 
         # 设置落盘的防抖任务
         self._settings_save_job = None
@@ -336,12 +370,12 @@ class PDFPageNumberRemoverGUI:
     # ========== 创建控件 ==========
     def _create_widgets(self):
         # --- 顶部标题栏 ---
-        self.header = tk.Frame(self.root, bg=Theme.BG, height=56)
+        self.header = tk.Frame(self.root, bg=Theme.BG, height=S(56))
         self.header_label = tk.Label(self.header, text="PDF Tool", bg=Theme.BG,
-                                     fg=Theme.ACCENT, font=("Segoe UI", 20, "bold"))
+                                     fg=Theme.ACCENT, font=F(20, "bold"))
         self.header_sub = tk.Label(self.header,
             text="去页码 · 改比例 · 改尺寸 · 旋转 · 去扫描瑕疵 · 去页眉Logo　|　批量处理，电子签章原样保留",
-            bg=Theme.BG, fg=Theme.FG_DIM, font=("Segoe UI", 10))
+            bg=Theme.BG, fg=Theme.FG_DIM, font=F(10))
 
         # --- 可滚动内容区域 ---
         self.scroll_canvas = tk.Canvas(self.root, bg=Theme.BG, highlightthickness=0, bd=0)
@@ -361,13 +395,13 @@ class PDFPageNumberRemoverGUI:
         self.card_files = tk.Frame(self.scroll_frame, bg=Theme.BG_CARD, highlightthickness=1,
                                    highlightbackground=Theme.BORDER)
         self.card_files_title = tk.Label(self.card_files, text="文件选择", bg=Theme.BG_CARD,
-                                          fg=Theme.ACCENT, font=("Segoe UI", 12, "bold"))
+                                          fg=Theme.ACCENT, font=F(12, "bold"))
 
         self.file_listbox = tk.Listbox(self.card_files, height=5, selectmode=tk.EXTENDED,
                                         bg=Theme.BG_INPUT, fg=Theme.FG,
                                         highlightthickness=1, highlightcolor=Theme.ACCENT,
                                         selectbackground=Theme.ACCENT, selectforeground="white",
-                                        borderwidth=0, font=("Segoe UI", 10),
+                                        borderwidth=0, font=F(10),
                                         relief="flat")
         # 拖拽支持
         if HAS_DND:
@@ -378,47 +412,47 @@ class PDFPageNumberRemoverGUI:
         self.file_listbox.configure(yscrollcommand=self.file_scrollbar.set)
 
         self.btn_add_files = tk.Button(self.card_files, text="+ 添加文件", bg=Theme.ACCENT,
-                                        fg="white", font=("Segoe UI", 10, "bold"),
+                                        fg="white", font=F(10, "bold"),
                                         activebackground=Theme.ACCENT_HOVER,
                                         activeforeground="white",
-                                        relief="flat", cursor="hand2", padx=16, pady=5,
+                                        relief="flat", cursor="hand2", padx=S(16), pady=S(5),
                                         command=self._add_files)
         self.btn_add_folder = tk.Button(self.card_files, text="+ 添加文件夹", bg=Theme.BG_CARD,
-                                         fg=Theme.FG, font=("Segoe UI", 10),
+                                         fg=Theme.FG, font=F(10),
                                          activebackground=Theme.BORDER,
                                          activeforeground=Theme.FG,
-                                         relief="flat", cursor="hand2", padx=12, pady=5,
+                                         relief="flat", cursor="hand2", padx=S(12), pady=S(5),
                                          command=self._add_folder)
         self.btn_remove = tk.Button(self.card_files, text="移除选中", bg=Theme.BG_CARD,
-                                     fg=Theme.WARNING, font=("Segoe UI", 10),
+                                     fg=Theme.WARNING, font=F(10),
                                      activebackground=Theme.BORDER,
                                      activeforeground=Theme.WARNING,
-                                     relief="flat", cursor="hand2", padx=12, pady=5,
+                                     relief="flat", cursor="hand2", padx=S(12), pady=S(5),
                                      command=self._remove_selected)
         self.btn_clear = tk.Button(self.card_files, text="清空", bg=Theme.BG_CARD,
-                                    fg=Theme.ERROR, font=("Segoe UI", 10),
+                                    fg=Theme.ERROR, font=F(10),
                                     activebackground=Theme.BORDER,
                                     activeforeground=Theme.ERROR,
-                                    relief="flat", cursor="hand2", padx=12, pady=5,
+                                    relief="flat", cursor="hand2", padx=S(12), pady=S(5),
                                     command=self._clear_all)
         self.file_count_label = tk.Label(self.card_files, text="0 个文件", bg=Theme.BG_CARD,
-                                          fg=Theme.FG_DIM, font=("Segoe UI", 9))
+                                          fg=Theme.FG_DIM, font=F(9))
 
         # --- 输出设置卡片 ---
         self.card_output = tk.Frame(self.scroll_frame, bg=Theme.BG_CARD, highlightthickness=1,
                                     highlightbackground=Theme.BORDER)
         self.card_output_title = tk.Label(self.card_output, text="输出设置", bg=Theme.BG_CARD,
-                                           fg=Theme.ACCENT, font=("Segoe UI", 12, "bold"))
+                                           fg=Theme.ACCENT, font=F(12, "bold"))
         self.output_var = tk.StringVar(value=self._default_output_dir())
         self.output_entry = tk.Entry(self.card_output, bg=Theme.BG_INPUT, fg=Theme.FG,
-                                      insertbackground=Theme.FG, font=("Segoe UI", 10),
+                                      insertbackground=Theme.FG, font=F(10),
                                       relief="flat", highlightthickness=1,
                                       highlightcolor=Theme.ACCENT,
                                       highlightbackground=Theme.BORDER)
         self.btn_browse = tk.Button(self.card_output, text="浏览...", bg=Theme.BG_CARD,
-                                     fg=Theme.FG, font=("Segoe UI", 10),
+                                     fg=Theme.FG, font=F(10),
                                      activebackground=Theme.BORDER,
-                                     relief="flat", cursor="hand2", padx=14, pady=4,
+                                     relief="flat", cursor="hand2", padx=S(14), pady=S(4),
                                      command=self._browse_output)
         self.replace_source_var = tk.BooleanVar(value=True)
         self.cb_replace_source = self._make_check(self.card_output, "替换源文件",
@@ -431,7 +465,7 @@ class PDFPageNumberRemoverGUI:
                                         highlightbackground=Theme.BORDER)
         self.card_func_mode_title = tk.Label(self.card_func_mode, text="功能模式",
                                               bg=Theme.BG_CARD, fg=Theme.ACCENT,
-                                              font=("Segoe UI", 12, "bold"))
+                                              font=F(12, "bold"))
         # --- 功能模式（多选Checkbutton） ---
         self.func_remove_pages_var = tk.BooleanVar(value=False)
         self.func_scale_var = tk.BooleanVar(value=False)
@@ -480,13 +514,13 @@ class PDFPageNumberRemoverGUI:
         self.func_mode_desc_label = tk.Label(self.card_func_mode,
                                               text="选择一项或多项功能组合处理",
                                               bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                              font=("Segoe UI", 9))
+                                              font=F(9))
 
         # --- 处理模式卡片（页码去除模式，仅去除页码相关功能时显示） ---
         self.card_mode = tk.Frame(self.scroll_frame, bg=Theme.BG_CARD, highlightthickness=1,
                                   highlightbackground=Theme.BORDER)
         self.card_mode_title = tk.Label(self.card_mode, text="页码去除模式", bg=Theme.BG_CARD,
-                                         fg=Theme.ACCENT, font=("Segoe UI", 12, "bold"))
+                                         fg=Theme.ACCENT, font=F(12, "bold"))
         self.mode_var = tk.StringVar(value="auto")
         self.mode_desc_var = tk.StringVar()
         modes = [
@@ -503,7 +537,7 @@ class PDFPageNumberRemoverGUI:
         self.mode_descriptions = {value: desc for _, value, desc in modes}
         self.mode_desc_label = tk.Label(self.card_mode, textvariable=self.mode_desc_var,
                                          bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                         font=("Segoe UI", 9))
+                                         font=F(9))
         self.mode_var.trace_add("write", self._update_mode_description)
         self._update_mode_description()
 
@@ -513,17 +547,17 @@ class PDFPageNumberRemoverGUI:
         self.settings_expanded = tk.BooleanVar(value=False)
         self.btn_toggle_settings = tk.Button(self.card_settings, text="▶ 高级设置",
                                               bg=Theme.BG_CARD, fg=Theme.ACCENT,
-                                              font=("Segoe UI", 12, "bold"),
+                                              font=F(12, "bold"),
                                               activebackground=Theme.BG_CARD,
                                               activeforeground=Theme.ACCENT_HOVER,
                                               relief="flat", cursor="hand2",
-                                              anchor=tk.W, padx=4,
+                                              anchor=tk.W, padx=S(4),
                                               command=self._toggle_settings)
 
         self.settings_content = tk.Frame(self.card_settings, bg=Theme.BG_CARD)
         # 底部比例
         self.lbl_bottom = tk.Label(self.settings_content, text="底部页码区域高度占比",
-                                    bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                    bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.bottom_ratio_var = tk.DoubleVar(value=0.12)
         self.scale_bottom = tk.Scale(self.settings_content, from_=0.02, to=0.20,
                                       resolution=0.01, orient=tk.HORIZONTAL,
@@ -533,10 +567,10 @@ class PDFPageNumberRemoverGUI:
                                       activebackground=Theme.ACCENT, cursor="sb_h_double_arrow")
         self.lbl_bottom_val = tk.Label(self.settings_content, text="0.12",
                                         bg=Theme.BG_CARD, fg=Theme.ACCENT,
-                                        font=("Segoe UI", 10, "bold"), width=5)
+                                        font=F(10, "bold"), width=5)
         # 顶部比例
         self.lbl_top = tk.Label(self.settings_content, text="顶部页码区域高度占比",
-                                 bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                 bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.top_ratio_var = tk.DoubleVar(value=0.08)
         self.scale_top = tk.Scale(self.settings_content, from_=0.02, to=0.20,
                                    resolution=0.01, orient=tk.HORIZONTAL,
@@ -546,15 +580,15 @@ class PDFPageNumberRemoverGUI:
                                    activebackground=Theme.ACCENT, cursor="sb_h_double_arrow")
         self.lbl_top_val = tk.Label(self.settings_content, text="0.08",
                                      bg=Theme.BG_CARD, fg=Theme.ACCENT,
-                                     font=("Segoe UI", 10, "bold"), width=5)
+                                     font=F(10, "bold"), width=5)
         # DPI
         self.lbl_dpi = tk.Label(self.settings_content, text="扫描件处理DPI",
-                                 bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                 bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.dpi_var = tk.IntVar(value=200)
         self.spin_dpi = tk.Spinbox(self.settings_content, from_=100, to=400, increment=50,
                                     textvariable=self.dpi_var, width=8,
                                     bg=Theme.BG_INPUT, fg=Theme.FG,
-                                    insertbackground=Theme.FG, font=("Segoe UI", 10),
+                                    insertbackground=Theme.FG, font=F(10),
                                     buttonbackground=Theme.BG_CARD, relief="flat",
                                     highlightthickness=1, highlightcolor=Theme.ACCENT,
                                     highlightbackground=Theme.BORDER)
@@ -569,6 +603,16 @@ class PDFPageNumberRemoverGUI:
                                         "保护印章（不去印章上的编号/日期）",
                                         self.check_seal_var)
 
+        # 点 X 号时先问一句"退出还是收进托盘"。朋友那台机器攒了一堆小图标：
+        # 他以为点 X 就是关掉程序，实际全缩进托盘了，下次打开又叠一个。
+        # 勾掉"关闭时先问我"以后就按上次选的那条直接执行，想反悔回这里勾上。
+        self.close_ask_var = tk.BooleanVar(value=True)
+        self.cb_close_ask = self._make_check(self.settings_content,
+                                            "关闭时先问我（退出 / 收进托盘）",
+                                            self.close_ask_var)
+        # 记住的那一次选择："quit" 或 "tray"
+        self.close_action_var = tk.StringVar(value="quit")
+
         self.bottom_ratio_var.trace_add("write",
             lambda *a: self.lbl_bottom_val.config(text=f"{self.bottom_ratio_var.get():.2f}"))
         self.top_ratio_var.trace_add("write",
@@ -579,7 +623,7 @@ class PDFPageNumberRemoverGUI:
                                     highlightbackground=Theme.BORDER)
         self.card_scale_title = tk.Label(self.card_scale, text="内容缩放设置",
                                           bg=Theme.BG_CARD, fg=Theme.ACCENT,
-                                          font=("Segoe UI", 12, "bold"))
+                                          font=F(12, "bold"))
 
         # 缩放方式：对齐缩放 / 等比缩放 / 根据边距缩放
         self.scale_mode_frame = tk.Frame(self.card_scale, bg=Theme.BG_CARD)
@@ -597,7 +641,7 @@ class PDFPageNumberRemoverGUI:
         self.scale_mode_hint = tk.Label(self.card_scale,
                                         text=self.SCALE_HINT_ALIGN,
                                         bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                        font=("Segoe UI", 9), justify=tk.LEFT, anchor=tk.W)
+                                        font=F(9), justify=tk.LEFT, anchor=tk.W)
 
         # 缩放比例控制
         self.scale_ratio_var = tk.IntVar(value=100)  # 百分比 10-150
@@ -608,7 +652,7 @@ class PDFPageNumberRemoverGUI:
 
         self.btn_scale_minus = tk.Button(self.scale_control_frame, text=" − ",
                                           bg=Theme.BG_INPUT, fg=Theme.ACCENT,
-                                          font=("Segoe UI", 14, "bold"),
+                                          font=F(14, "bold"),
                                           activebackground=Theme.BORDER,
                                           activeforeground=Theme.ACCENT_HOVER,
                                           relief="flat", cursor="hand2",
@@ -625,7 +669,7 @@ class PDFPageNumberRemoverGUI:
 
         self.btn_scale_plus = tk.Button(self.scale_control_frame, text=" + ",
                                          bg=Theme.BG_INPUT, fg=Theme.ACCENT,
-                                         font=("Segoe UI", 14, "bold"),
+                                         font=F(14, "bold"),
                                          activebackground=Theme.BORDER,
                                          activeforeground=Theme.ACCENT_HOVER,
                                          relief="flat", cursor="hand2",
@@ -633,7 +677,7 @@ class PDFPageNumberRemoverGUI:
 
         self.scale_ratio_label = tk.Label(self.scale_control_frame, textvariable=self.scale_ratio_display_var,
                                            bg=Theme.BG_CARD, fg=Theme.ACCENT,
-                                           font=("Segoe UI", 16, "bold"), width=5)
+                                           font=F(16, "bold"), width=5)
 
         # 预设比例快捷按钮
         self.scale_presets_frame = tk.Frame(self.card_scale, bg=Theme.BG_CARD)
@@ -642,10 +686,10 @@ class PDFPageNumberRemoverGUI:
         for text, value in presets:
             btn = tk.Button(self.scale_presets_frame, text=text,
                             bg=Theme.BG_INPUT, fg=Theme.FG,
-                            font=("Segoe UI", 9),
+                            font=F(9),
                             activebackground=Theme.BORDER,
                             activeforeground=Theme.ACCENT,
-                            relief="flat", cursor="hand2", padx=8, pady=2,
+                            relief="flat", cursor="hand2", padx=S(8), pady=S(2),
                             command=lambda v=value: self._set_scale_preset(v))
             self.scale_preset_buttons.append(btn)
 
@@ -653,7 +697,7 @@ class PDFPageNumberRemoverGUI:
         self.offset_frame = tk.Frame(self.card_scale, bg=Theme.BG_CARD)
         self.offset_title_label = tk.Label(self.offset_frame, text="内容偏移",
                                             bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                            font=("Segoe UI", 9))
+                                            font=F(9))
         self.offset_x_var = tk.IntVar(value=0)
         self.offset_y_var = tk.IntVar(value=0)
 
@@ -661,63 +705,63 @@ class PDFPageNumberRemoverGUI:
         self.offset_x_frame = tk.Frame(self.offset_frame, bg=Theme.BG_CARD)
         self.offset_x_label = tk.Label(self.offset_x_frame, text="水平",
                                          bg=Theme.BG_CARD, fg=Theme.FG,
-                                         font=("Segoe UI", 9), width=4)
+                                         font=F(9), width=4)
         self.btn_offset_x_minus = tk.Button(self.offset_x_frame, text=" ← ",
                                              bg=Theme.BG_INPUT, fg=Theme.ACCENT,
-                                             font=("Segoe UI", 9, "bold"),
+                                             font=F(9, "bold"),
                                              activebackground=Theme.BORDER,
                                              relief="flat", cursor="hand2",
                                              width=3, command=lambda: self._adjust_offset("x", -10))
         self.offset_x_spinbox = tk.Spinbox(self.offset_x_frame, from_=-500, to=500,
                                             increment=5, textvariable=self.offset_x_var,
-                                            width=6, font=("Segoe UI", 9),
+                                            width=6, font=F(9),
                                             bg=Theme.BG_INPUT, fg=Theme.FG,
                                             buttonbackground=Theme.BORDER,
                                             command=lambda: self._on_offset_change())
         self.btn_offset_x_plus = tk.Button(self.offset_x_frame, text=" → ",
                                             bg=Theme.BG_INPUT, fg=Theme.ACCENT,
-                                            font=("Segoe UI", 9, "bold"),
+                                            font=F(9, "bold"),
                                             activebackground=Theme.BORDER,
                                             relief="flat", cursor="hand2",
                                             width=3, command=lambda: self._adjust_offset("x", 10))
         self.offset_x_unit = tk.Label(self.offset_x_frame, text="pt",
                                        bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                       font=("Segoe UI", 9))
+                                       font=F(9))
 
         # 垂直偏移行
         self.offset_y_frame = tk.Frame(self.offset_frame, bg=Theme.BG_CARD)
         self.offset_y_label = tk.Label(self.offset_y_frame, text="垂直",
                                          bg=Theme.BG_CARD, fg=Theme.FG,
-                                         font=("Segoe UI", 9), width=4)
+                                         font=F(9), width=4)
         self.btn_offset_y_minus = tk.Button(self.offset_y_frame, text=" ↑ ",
                                              bg=Theme.BG_INPUT, fg=Theme.ACCENT,
-                                             font=("Segoe UI", 9, "bold"),
+                                             font=F(9, "bold"),
                                              activebackground=Theme.BORDER,
                                              relief="flat", cursor="hand2",
                                              width=3, command=lambda: self._adjust_offset("y", -10))
         self.offset_y_spinbox = tk.Spinbox(self.offset_y_frame, from_=-500, to=500,
                                             increment=5, textvariable=self.offset_y_var,
-                                            width=6, font=("Segoe UI", 9),
+                                            width=6, font=F(9),
                                             bg=Theme.BG_INPUT, fg=Theme.FG,
                                             buttonbackground=Theme.BORDER,
                                             command=lambda: self._on_offset_change())
         self.btn_offset_y_plus = tk.Button(self.offset_y_frame, text=" ↓ ",
                                             bg=Theme.BG_INPUT, fg=Theme.ACCENT,
-                                            font=("Segoe UI", 9, "bold"),
+                                            font=F(9, "bold"),
                                             activebackground=Theme.BORDER,
                                             relief="flat", cursor="hand2",
                                             width=3, command=lambda: self._adjust_offset("y", 10))
         self.offset_y_unit = tk.Label(self.offset_y_frame, text="pt",
                                        bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                       font=("Segoe UI", 9))
+                                       font=F(9))
 
         # 偏移重置按钮
         self.btn_offset_reset = tk.Button(self.offset_frame, text="重置偏移",
                                            bg=Theme.BG_INPUT, fg=Theme.FG,
-                                           font=("Segoe UI", 8),
+                                           font=F(8),
                                            activebackground=Theme.BORDER,
                                            relief="flat", cursor="hand2",
-                                           padx=8, pady=1,
+                                           padx=S(8), pady=S(1),
                                            command=self._reset_offset)
 
         # Spinbox手动输入绑定
@@ -731,7 +775,7 @@ class PDFPageNumberRemoverGUI:
         self.preview_title_frame = tk.Frame(self.preview_frame, bg=Theme.BG_CARD)
         self.preview_label_title = tk.Label(self.preview_title_frame, text="实时预览",
                                              bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                             font=("Segoe UI", 9))
+                                             font=F(9))
         # 预览标题行与画布行（作为属性，便于切换缩放方式时反复pack/forget）
         self.preview_nav_frame = tk.Frame(self.preview_frame, bg=Theme.BG_CARD)
         self.preview_canvas_frame = tk.Frame(self.preview_frame, bg=Theme.BG_CARD)
@@ -739,10 +783,9 @@ class PDFPageNumberRemoverGUI:
         self.preview_fit_note = tk.Label(self.preview_frame,
                                          text="红色虚线为要求的上/下边距位置，内容边缘应正好贴在线上",
                                          bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                         font=("Segoe UI", 9))
+                                         font=F(9))
         # 预览Canvas尺寸（根据页面横竖动态调整）
-        self._preview_canvas_w = 400
-        self._preview_canvas_h = 560
+        self._preview_canvas_w, self._preview_canvas_h = _preview_size(False)
         self._preview_page_is_landscape = False  # 跟踪当前预览页面方向
         self.preview_canvas = tk.Canvas(self.preview_canvas_frame, width=self._preview_canvas_w, height=self._preview_canvas_h,
                                          bg=Theme.BG_INPUT, highlightthickness=1,
@@ -750,23 +793,23 @@ class PDFPageNumberRemoverGUI:
         self.preview_placeholder = tk.Label(self.preview_frame,
                                              text="请添加PDF文件以预览缩放效果",
                                              bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                             font=("Segoe UI", 10))
+                                             font=F(10))
         # 预览页面控制
         self.preview_page_var = tk.IntVar(value=1)
         self.preview_page_input_var = tk.StringVar(value="1")
         self.preview_page_label = tk.Label(self.preview_nav_frame, text="预览页：",
                                             bg=Theme.BG_CARD, fg=Theme.FG,
-                                            font=("Segoe UI", 9))
+                                            font=F(9))
         self.btn_preview_prev = tk.Button(self.preview_nav_frame, text="◀",
                                            bg=Theme.BG_INPUT, fg=Theme.FG,
-                                           font=("Segoe UI", 10),
+                                           font=F(10),
                                            activebackground=Theme.BORDER,
                                            relief="flat", cursor="hand2",
-                                           padx=6, command=self._preview_prev_page)
+                                           padx=S(6), command=self._preview_prev_page)
         self.preview_page_entry = tk.Entry(self.preview_nav_frame, textvariable=self.preview_page_input_var,
                                            bg=Theme.BG_INPUT, fg=Theme.ACCENT,
                                            insertbackground=Theme.ACCENT,
-                                           font=("Segoe UI", 10, "bold"), width=5,
+                                           font=F(10, "bold"), width=5,
                                            justify=tk.CENTER, relief="flat", highlightthickness=1,
                                            highlightcolor=Theme.ACCENT, highlightbackground=Theme.BORDER)
         self.preview_page_entry.bind("<Return>", self._preview_jump_to_input)
@@ -774,19 +817,19 @@ class PDFPageNumberRemoverGUI:
         self.preview_page_entry.bind("<FocusOut>", lambda e: self._sync_preview_page_input())
         self.btn_preview_goto = tk.Button(self.preview_nav_frame, text="跳转",
                                            bg=Theme.BG_INPUT, fg=Theme.FG,
-                                           font=("Segoe UI", 9),
+                                           font=F(9),
                                            activebackground=Theme.BORDER,
                                            relief="flat", cursor="hand2",
-                                           padx=6, command=self._preview_jump_to_input)
+                                           padx=S(6), command=self._preview_jump_to_input)
         self.btn_preview_next = tk.Button(self.preview_nav_frame, text="▶",
                                            bg=Theme.BG_INPUT, fg=Theme.FG,
-                                           font=("Segoe UI", 10),
+                                           font=F(10),
                                            activebackground=Theme.BORDER,
                                            relief="flat", cursor="hand2",
-                                           padx=6, command=self._preview_next_page)
+                                           padx=S(6), command=self._preview_next_page)
         self.preview_total_label = tk.Label(self.preview_nav_frame, text="",
                                              bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                             font=("Segoe UI", 9))
+                                             font=F(9))
         # 页码显示与输入框保持同步（翻页按钮、载入文件等都会改 preview_page_var）
         self.preview_page_var.trace_add("write", lambda *_: self._sync_preview_page_input())
 
@@ -802,25 +845,25 @@ class PDFPageNumberRemoverGUI:
                                          highlightbackground=Theme.BORDER)
         self.card_page_range_title = tk.Label(self.card_page_range, text="页面范围",
                                                bg=Theme.BG_CARD, fg=Theme.ACCENT,
-                                               font=("Segoe UI", 12, "bold"))
+                                               font=F(12, "bold"))
         self.page_range_var = tk.StringVar(value="")
         self.page_range_entry = tk.Entry(self.card_page_range, textvariable=self.page_range_var,
                                           bg=Theme.BG_INPUT, fg=Theme.FG,
-                                          insertbackground=Theme.FG, font=("Segoe UI", 10),
+                                          insertbackground=Theme.FG, font=F(10),
                                           relief="flat", highlightthickness=1,
                                           highlightcolor=Theme.ACCENT,
                                           highlightbackground=Theme.BORDER, width=25)
         self.page_range_hint = tk.Label(self.card_page_range,
                                          text="留空=所有页面，示例：3,5-7 表示第3页和第5-7页",
                                          bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                         font=("Segoe UI", 9))
+                                         font=F(9))
 
         # --- 自动旋转设置卡片 ---
         self.card_rotate = tk.Frame(self.scroll_frame, bg=Theme.BG_CARD, highlightthickness=1,
                                      highlightbackground=Theme.BORDER)
         self.card_rotate_title = tk.Label(self.card_rotate, text="旋转设置",
                                            bg=Theme.BG_CARD, fg=Theme.ACCENT,
-                                           font=("Segoe UI", 12, "bold"))
+                                           font=F(12, "bold"))
         self.rotate_direction_var = tk.StringVar(value="counterclockwise")
         (self.rb_rotate_cw,
          self.rb_rotate_ccw) = self._make_choice_group(
@@ -837,18 +880,18 @@ class PDFPageNumberRemoverGUI:
                                      highlightbackground=Theme.BORDER)
         self.card_resize_title = tk.Label(self.card_resize, text="页面尺寸设置",
                                            bg=Theme.BG_CARD, fg=Theme.ACCENT,
-                                           font=("Segoe UI", 12, "bold"))
+                                           font=F(12, "bold"))
 
         # 目标尺寸选择
         self.resize_size_frame = tk.Frame(self.card_resize, bg=Theme.BG_CARD)
         self.resize_size_label = tk.Label(self.resize_size_frame, text="目标尺寸：",
                                            bg=Theme.BG_CARD, fg=Theme.FG,
-                                           font=("Segoe UI", 10))
+                                           font=F(10))
         self.resize_size_var = tk.StringVar(value="A4")
         self.resize_size_combo = ttk.Combobox(self.resize_size_frame, textvariable=self.resize_size_var,
                                                values=list(PAGE_SIZES.keys()),
                                                state="readonly", width=10,
-                                               font=("Segoe UI", 10))
+                                               font=F(10))
         self.resize_size_combo.set("A4")
 
         # 内容缩放功能已合并到"PDF修改比例"中，此处不再重复
@@ -858,11 +901,11 @@ class PDFPageNumberRemoverGUI:
                                   highlightbackground=Theme.BORDER)
         self.card_logo_title = tk.Label(self.card_logo, text="页眉Logo去除设置",
                                          bg=Theme.BG_CARD, fg=Theme.ACCENT,
-                                         font=("Segoe UI", 12, "bold"))
+                                         font=F(12, "bold"))
         # 标识挂在哪一角：角区就是从这一角往里圈出来的搜索范围
         self.logo_anchor_frame = tk.Frame(self.card_logo, bg=Theme.BG_CARD)
         self.logo_anchor_label = tk.Label(self.logo_anchor_frame, text="标识位置：",
-                                          bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                          bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.logo_anchor_var = tk.StringVar(value="top_left")
         self.logo_anchor_radios = self._make_choice_group(
             self.logo_anchor_frame,
@@ -873,27 +916,27 @@ class PDFPageNumberRemoverGUI:
         # 搜索区大小：角区宽高，比标识本身放宽裕，标识离角多远都能圈进来
         self.logo_zone_frame = tk.Frame(self.card_logo, bg=Theme.BG_CARD)
         self.logo_zone_w_label = tk.Label(self.logo_zone_frame, text="搜索区宽(cm)：",
-                                          bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                          bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.logo_zone_w_var = tk.StringVar(value="9")
         self.logo_zone_w_entry = tk.Entry(self.logo_zone_frame, textvariable=self.logo_zone_w_var,
                                           bg=Theme.BG_INPUT, fg=Theme.FG, insertbackground=Theme.FG,
-                                          font=("Segoe UI", 10), relief="flat", highlightthickness=1,
+                                          font=F(10), relief="flat", highlightthickness=1,
                                           highlightcolor=Theme.ACCENT, highlightbackground=Theme.BORDER,
                                           width=6, justify=tk.CENTER)
         self.logo_zone_h_label = tk.Label(self.logo_zone_frame, text="高(cm)：",
-                                          bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                          bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.logo_zone_h_var = tk.StringVar(value="4")
         self.logo_zone_h_entry = tk.Entry(self.logo_zone_frame, textvariable=self.logo_zone_h_var,
                                           bg=Theme.BG_INPUT, fg=Theme.FG, insertbackground=Theme.FG,
-                                          font=("Segoe UI", 10), relief="flat", highlightthickness=1,
+                                          font=F(10), relief="flat", highlightthickness=1,
                                           highlightcolor=Theme.ACCENT, highlightbackground=Theme.BORDER,
                                           width=6, justify=tk.CENTER)
         self.logo_presence_label = tk.Label(self.logo_zone_frame, text="跨页一致比例(%)：",
-                                            bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                            bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.logo_presence_var = tk.StringVar(value="50")
         self.logo_presence_entry = tk.Entry(self.logo_zone_frame, textvariable=self.logo_presence_var,
                                             bg=Theme.BG_INPUT, fg=Theme.FG, insertbackground=Theme.FG,
-                                            font=("Segoe UI", 10), relief="flat", highlightthickness=1,
+                                            font=F(10), relief="flat", highlightthickness=1,
                                             highlightcolor=Theme.ACCENT, highlightbackground=Theme.BORDER,
                                             width=6, justify=tk.CENTER)
 
@@ -906,30 +949,30 @@ class PDFPageNumberRemoverGUI:
         self.logo_row_hint_label = tk.Label(
             self.logo_row_frame,
             text="勾上后按整行处理：这一行右侧的\"文件编号/文件版本\"也会一起去掉",
-            bg=Theme.BG_CARD, fg=Theme.FG_DIM, font=("Segoe UI", 9), justify=tk.LEFT)
+            bg=Theme.BG_CARD, fg=Theme.FG_DIM, font=F(9), justify=tk.LEFT)
 
         self.logo_hint_label = tk.Label(
             self.card_logo,
             text="跨页一致比例：这块墨迹至少要在这么多比例的采样页上同时出现才算固定标识。\n"
                  "调高更保险（只认页页都有的角标），调低能容忍有的页没印标识；宁可漏掉，不吃正文",
-            bg=Theme.BG_CARD, fg=Theme.FG_DIM, font=("Segoe UI", 9), justify=tk.LEFT)
+            bg=Theme.BG_CARD, fg=Theme.FG_DIM, font=F(9), justify=tk.LEFT)
 
         # --- 按边距缩放控件（属于"内容缩放设置"卡片的一种缩放方式） ---
         self.fit_margin_frame = tk.Frame(self.card_scale, bg=Theme.BG_CARD)
         self.fit_top_label = tk.Label(self.fit_margin_frame, text="顶部距离(cm)：",
-                                       bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                       bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.fit_top_var = tk.StringVar(value="2.5")
         self.fit_top_entry = tk.Entry(self.fit_margin_frame, textvariable=self.fit_top_var,
                                        bg=Theme.BG_INPUT, fg=Theme.FG, insertbackground=Theme.FG,
-                                       font=("Segoe UI", 10), relief="flat", highlightthickness=1,
+                                       font=F(10), relief="flat", highlightthickness=1,
                                        highlightcolor=Theme.ACCENT, highlightbackground=Theme.BORDER,
                                        width=6, justify=tk.CENTER)
         self.fit_bottom_label = tk.Label(self.fit_margin_frame, text="底部距离(cm)：",
-                                          bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                          bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.fit_bottom_var = tk.StringVar(value="2.5")
         self.fit_bottom_entry = tk.Entry(self.fit_margin_frame, textvariable=self.fit_bottom_var,
                                           bg=Theme.BG_INPUT, fg=Theme.FG, insertbackground=Theme.FG,
-                                          font=("Segoe UI", 10), relief="flat", highlightthickness=1,
+                                          font=F(10), relief="flat", highlightthickness=1,
                                           highlightcolor=Theme.ACCENT, highlightbackground=Theme.BORDER,
                                           width=6, justify=tk.CENTER)
 
@@ -943,27 +986,27 @@ class PDFPageNumberRemoverGUI:
         self.fit_side_cm_var = tk.StringVar(value="2.0")
         self.fit_side_cm_entry = tk.Entry(self.fit_side_frame, textvariable=self.fit_side_cm_var,
                                           bg=Theme.BG_INPUT, fg=Theme.FG, insertbackground=Theme.FG,
-                                          font=("Segoe UI", 10), relief="flat", highlightthickness=1,
+                                          font=F(10), relief="flat", highlightthickness=1,
                                           highlightcolor=Theme.ACCENT, highlightbackground=Theme.BORDER,
                                           width=6, justify=tk.CENTER)
         self.fit_side_hint = tk.Label(self.fit_side_frame, text=self.FIT_SIDE_HINT_ON,
-                                      bg=Theme.BG_CARD, fg=Theme.FG_DIM, font=("Segoe UI", 9))
+                                      bg=Theme.BG_CARD, fg=Theme.FG_DIM, font=F(9))
         self.fit_side_cm_entry.bind("<Return>", lambda e: self._schedule_preview_update())
         self.fit_side_cm_entry.bind("<FocusOut>", lambda e: self._schedule_preview_update())
 
         # 预缩放比例：先把内容按这个比例缩放，再做边距对齐（只在"顶部对齐"判定下生效）
         self.fit_pre_frame = tk.Frame(self.card_scale, bg=Theme.BG_CARD)
         self.fit_pre_label = tk.Label(self.fit_pre_frame, text="预缩放比例(%)：",
-                                       bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                       bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.fit_pre_var = tk.IntVar(value=100)
         self.fit_pre_spinbox = tk.Spinbox(self.fit_pre_frame, from_=50, to=200, increment=5,
                                            textvariable=self.fit_pre_var, width=6,
-                                           font=("Segoe UI", 10), bg=Theme.BG_INPUT, fg=Theme.FG,
+                                           font=F(10), bg=Theme.BG_INPUT, fg=Theme.FG,
                                            insertbackground=Theme.FG, relief="flat",
                                            buttonbackground=Theme.BORDER,
                                            command=self._schedule_preview_update)
         self.fit_pre_hint = tk.Label(self.fit_pre_frame, text=self.FIT_PRE_HINT_ON,
-                                      bg=Theme.BG_CARD, fg=Theme.FG_DIM, font=("Segoe UI", 9))
+                                      bg=Theme.BG_CARD, fg=Theme.FG_DIM, font=F(9))
         self.fit_pre_spinbox.bind("<Return>", lambda e: self._schedule_preview_update())
         self.fit_pre_spinbox.bind("<FocusOut>", lambda e: self._schedule_preview_update())
 
@@ -975,11 +1018,11 @@ class PDFPageNumberRemoverGUI:
                                                  self.fit_auto_skip_var,
                                                  command=self._on_fit_auto_skip_change)
         self.fit_small_label = tk.Label(self.fit_skip_frame, text="印发说明页内容高度阈值(%)：",
-                                        bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                        bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.fit_small_var = tk.StringVar(value="15")
         self.fit_small_entry = tk.Entry(self.fit_skip_frame, textvariable=self.fit_small_var,
                                         bg=Theme.BG_INPUT, fg=Theme.FG, insertbackground=Theme.FG,
-                                        font=("Segoe UI", 10), relief="flat", highlightthickness=1,
+                                        font=F(10), relief="flat", highlightthickness=1,
                                         highlightcolor=Theme.ACCENT, highlightbackground=Theme.BORDER,
                                         width=5, justify=tk.CENTER)
         self.fit_small_entry.bind("<Return>", lambda e: self._schedule_preview_update())
@@ -987,15 +1030,15 @@ class PDFPageNumberRemoverGUI:
 
         self.fit_skip_pages_frame = tk.Frame(self.card_scale, bg=Theme.BG_CARD)
         self.fit_skip_pages_label = tk.Label(self.fit_skip_pages_frame, text="手动跳过页码：",
-                                             bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                             bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.fit_skip_pages_var = tk.StringVar(value="")
         self.fit_skip_pages_entry = tk.Entry(self.fit_skip_pages_frame, textvariable=self.fit_skip_pages_var,
                                              bg=Theme.BG_INPUT, fg=Theme.FG, insertbackground=Theme.FG,
-                                             font=("Segoe UI", 10), relief="flat", highlightthickness=1,
+                                             font=F(10), relief="flat", highlightthickness=1,
                                              highlightcolor=Theme.ACCENT, highlightbackground=Theme.BORDER,
                                              width=18)
         self.fit_skip_pages_hint = tk.Label(self.fit_skip_pages_frame, text="如 1,12；这些页原样输出",
-                                            bg=Theme.BG_CARD, fg=Theme.FG_DIM, font=("Segoe UI", 9))
+                                            bg=Theme.BG_CARD, fg=Theme.FG_DIM, font=F(9))
         self.fit_skip_pages_entry.bind("<Return>", lambda e: self._schedule_preview_update())
         self.fit_skip_pages_entry.bind("<FocusOut>", lambda e: self._schedule_preview_update())
 
@@ -1038,21 +1081,21 @@ class PDFPageNumberRemoverGUI:
         # 非等比时未被边距接管的那个方向按这里的比例缩放
         self.stretch_ratio_frame = tk.Frame(self.card_scale, bg=Theme.BG_CARD)
         self.stretch_x_label = tk.Label(self.stretch_ratio_frame, text="左右比例(%)：",
-                                        bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                        bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.stretch_x_var = tk.IntVar(value=100)
         self.stretch_x_spinbox = tk.Spinbox(self.stretch_ratio_frame, from_=50, to=200,
                                             increment=5, textvariable=self.stretch_x_var,
-                                            width=6, font=("Segoe UI", 10),
+                                            width=6, font=F(10),
                                             bg=Theme.BG_INPUT, fg=Theme.FG,
                                             insertbackground=Theme.FG, relief="flat",
                                             buttonbackground=Theme.BORDER,
                                             command=self._schedule_preview_update)
         self.stretch_y_label = tk.Label(self.stretch_ratio_frame, text="上下比例(%)：",
-                                        bg=Theme.BG_CARD, fg=Theme.FG, font=("Segoe UI", 10))
+                                        bg=Theme.BG_CARD, fg=Theme.FG, font=F(10))
         self.stretch_y_var = tk.IntVar(value=100)
         self.stretch_y_spinbox = tk.Spinbox(self.stretch_ratio_frame, from_=50, to=200,
                                             increment=5, textvariable=self.stretch_y_var,
-                                            width=6, font=("Segoe UI", 10),
+                                            width=6, font=F(10),
                                             bg=Theme.BG_INPUT, fg=Theme.FG,
                                             insertbackground=Theme.FG, relief="flat",
                                             buttonbackground=Theme.BORDER,
@@ -1060,14 +1103,14 @@ class PDFPageNumberRemoverGUI:
         self.stretch_ratio_hint = tk.Label(self.stretch_ratio_frame,
                                            text="没被边距接管的那个方向按这里的比例缩放",
                                            bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                           font=("Segoe UI", 9))
+                                           font=F(9))
         for spin in (self.stretch_x_spinbox, self.stretch_y_spinbox):
             spin.bind("<Return>", lambda e: self._schedule_preview_update())
             spin.bind("<FocusOut>", lambda e: self._schedule_preview_update())
 
         self.fit_hint = tk.Label(self.card_scale,
                                   text=self.FIT_HINT_ALIGN,
-                                  bg=Theme.BG_CARD, fg=Theme.FG_DIM, font=("Segoe UI", 9),
+                                  bg=Theme.BG_CARD, fg=Theme.FG_DIM, font=F(9),
                                   justify=tk.LEFT, anchor=tk.W)
         # 距离输入改变后刷新预览（回车或失去焦点时）
         self.fit_top_entry.bind("<Return>", lambda e: self._schedule_preview_update())
@@ -1079,19 +1122,19 @@ class PDFPageNumberRemoverGUI:
         self.card_progress = tk.Frame(self.scroll_frame, bg=Theme.BG_CARD, highlightthickness=1,
                                        highlightbackground=Theme.BORDER)
         self.card_progress_title = tk.Label(self.card_progress, text="处理进度", bg=Theme.BG_CARD,
-                                             fg=Theme.ACCENT, font=("Segoe UI", 12, "bold"))
+                                             fg=Theme.ACCENT, font=F(12, "bold"))
         self.progress_var = tk.DoubleVar(value=0)
         self.progress_bar = ttk.Progressbar(self.card_progress, variable=self.progress_var,
                                              maximum=100, length=600)
         self.status_icon = tk.Label(self.card_progress, text="◉", bg=Theme.BG_CARD,
-                                     fg=Theme.SUCCESS, font=("Segoe UI", 12))
+                                     fg=Theme.SUCCESS, font=F(12))
         self.status_label = tk.Label(self.card_progress, text="就绪",
                                       bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                                      font=("Segoe UI", 10))
+                                      font=F(10))
         self.log_text = scrolledtext.ScrolledText(self.card_progress, height=6, wrap=tk.WORD,
                                                    bg=Theme.BG_INPUT, fg=Theme.FG,
                                                    insertbackground=Theme.FG,
-                                                   font=("Consolas", 9),
+                                                   font=mono(9),
                                                    relief="flat", state=tk.DISABLED,
                                                    highlightthickness=1,
                                                    highlightcolor=Theme.ACCENT,
@@ -1101,69 +1144,69 @@ class PDFPageNumberRemoverGUI:
                                      activebackground=Theme.BORDER)
 
         # --- 底部操作栏 ---
-        self.footer = tk.Frame(self.root, bg=Theme.BG, height=56)
+        self.footer = tk.Frame(self.root, bg=Theme.BG, height=S(56))
         self.btn_start = tk.Button(self.footer, text="开始处理", bg=Theme.ACCENT,
-                                    fg="white", font=("Segoe UI", 12, "bold"),
+                                    fg="white", font=F(12, "bold"),
                                     activebackground=Theme.ACCENT_HOVER,
                                     activeforeground="white",
                                     relief="flat", cursor="hand2",
-                                    padx=30, pady=8, command=self._start_process)
+                                    padx=S(30), pady=S(8), command=self._start_process)
         self.btn_stop = tk.Button(self.footer, text="停止", bg="#585b70",
-                                   fg="white", font=("Segoe UI", 11),
+                                   fg="white", font=F(11),
                                    activebackground="#6c7086",
                                    activeforeground="white",
                                    relief="flat", cursor="hand2",
-                                   padx=20, pady=8, command=self._stop_process)
+                                   padx=S(20), pady=S(8), command=self._stop_process)
         self.btn_open = tk.Button(self.footer, text="打开输出目录", bg=Theme.BG_CARD,
-                                   fg=Theme.FG, font=("Segoe UI", 10),
+                                   fg=Theme.FG, font=F(10),
                                    activebackground=Theme.BORDER,
                                    activeforeground=Theme.FG,
                                    relief="flat", cursor="hand2",
-                                   padx=16, pady=8, command=self._open_output_dir)
+                                   padx=S(16), pady=S(8), command=self._open_output_dir)
 
     # ========== 布局 ==========
     def _layout_widgets(self):
         # 顶部标题栏（不随内容滚动）
-        self.header.pack(fill=tk.X, padx=20, pady=(12, 0))
+        self.header.pack(fill=tk.X, padx=S(20), pady=(S(12), S(0)))
         self.header_label.pack(anchor=tk.W)
-        self.header_sub.pack(anchor=tk.W, pady=(2, 6))
+        self.header_sub.pack(anchor=tk.W, pady=(S(2), S(6)))
         # 标题区下面一条细分隔线，把"这是什么工具"和"在这儿干活"分开
-        tk.Frame(self.root, bg=Theme.BORDER, height=1).pack(fill=tk.X, padx=20)
+        tk.Frame(self.root, bg=Theme.BORDER, height=1).pack(fill=tk.X, padx=S(20))
 
         # 底部按钮栏（不随内容滚动）
-        tk.Frame(self.root, bg=Theme.BORDER, height=1).pack(fill=tk.X, side=tk.BOTTOM, padx=20)
-        self.footer.pack(fill=tk.X, side=tk.BOTTOM, padx=20, pady=(10, 14))
-        self.btn_open.pack(side=tk.LEFT, padx=(0, 8))
-        self.btn_stop.pack(side=tk.RIGHT, padx=(8, 0))
+        tk.Frame(self.root, bg=Theme.BORDER, height=1).pack(fill=tk.X, side=tk.BOTTOM, padx=S(20))
+        self.footer.pack(fill=tk.X, side=tk.BOTTOM, padx=S(20), pady=(S(10), S(14)))
+        self.btn_open.pack(side=tk.LEFT, padx=(S(0), S(8)))
+        self.btn_stop.pack(side=tk.RIGHT, padx=(S(8), S(0)))
         self.btn_start.pack(side=tk.RIGHT)
 
         # 可滚动内容区域（填充header和footer之间的空间）
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.scroll_canvas.pack(fill=tk.BOTH, expand=True, padx=(16, 0), pady=(6, 0))
+        self.scroll_canvas.pack(fill=tk.BOTH, expand=True, padx=(S(16), S(0)), pady=(S(6), S(0)))
 
         # 卡片内容（pack到scroll_frame内部）
         self._pack_card(self.card_files, self.card_files_title,
-                        lambda: self._layout_files_card(), pady=(6, 6))
+                        lambda: self._layout_files_card(), pady=(S(6), S(6)))
         self._pack_card(self.card_output, self.card_output_title,
-                        lambda: self._layout_output_card(), pady=6)
+                        lambda: self._layout_output_card(), pady=S(6))
         self._pack_card(self.card_func_mode, self.card_func_mode_title,
-                        lambda: self._layout_func_mode_card(), pady=6)
+                        lambda: self._layout_func_mode_card(), pady=S(6))
         self._pack_card(self.card_mode, self.card_mode_title,
-                        lambda: self._layout_mode_card(), pady=6)
+                        lambda: self._layout_mode_card(), pady=S(6))
         self._pack_card(self.card_settings, None,
-                        lambda: self._layout_settings_card(), pady=6)
+                        lambda: self._layout_settings_card(), pady=S(6))
         self._pack_card(self.card_scale, self.card_scale_title,
-                        lambda: self._layout_scale_card(), pady=6)
+                        lambda: self._layout_scale_card(), pady=S(6))
         self._pack_card(self.card_page_range, self.card_page_range_title,
-                        lambda: self._layout_page_range_card(), pady=6)
+                        lambda: self._layout_page_range_card(), pady=S(6))
         self._pack_card(self.card_rotate, self.card_rotate_title,
-                        lambda: self._layout_rotate_card(), pady=6)
+                        lambda: self._layout_rotate_card(), pady=S(6))
         self._pack_card(self.card_resize, self.card_resize_title,
-                        lambda: self._layout_resize_card(), pady=6)
+                        lambda: self._layout_resize_card(), pady=S(6))
         self._pack_card(self.card_logo, self.card_logo_title,
-                        lambda: self._layout_logo_card(), pady=6)
+                        lambda: self._layout_logo_card(), pady=S(6))
         self._pack_card(self.card_progress, self.card_progress_title,
-                        lambda: self._layout_progress_card(), pady=6)
+                        lambda: self._layout_progress_card(), pady=S(6))
 
         self._apply_button_hover([self.btn_start, self.btn_stop, self.btn_open,
                                   self.btn_add_files, self.btn_add_folder,
@@ -1178,14 +1221,14 @@ class PDFPageNumberRemoverGUI:
         # 初始状态：根据功能模式控制页码去除模式卡片可见性
         self._on_func_mode_change()
 
-    def _pack_card(self, card, title_label, layout_fn, pady=5):
-        card.pack(fill=tk.X, padx=(0, 16), pady=pady)
+    def _pack_card(self, card, title_label, layout_fn, pady=S(5)):
+        card.pack(fill=tk.X, padx=(S(0), S(16)), pady=pady)
         if title_label:
-            title_label.pack(anchor=tk.W, padx=(12, 12), pady=(10, 0))
+            title_label.pack(anchor=tk.W, padx=(S(12), S(12)), pady=(S(10), S(0)))
             # 标题底下一小段强调色横线：分节起点一眼能看出来，又不用把标题塞进新容器
             # （Tk 里用 pack -in 换父容器会让按钮画不出来，别再走那条路）
             tk.Frame(card, bg=Theme.ACCENT, width=46, height=2).pack(
-                anchor=tk.W, padx=12, pady=(3, 6))
+                anchor=tk.W, padx=S(12), pady=(S(3), S(6)))
         layout_fn()
 
     def _on_scroll_canvas_configure(self, event):
@@ -1218,68 +1261,69 @@ class PDFPageNumberRemoverGUI:
         self.scroll_canvas.yview_scroll(1, "units")
 
     def _layout_files_card(self):
-        self.file_listbox.pack(fill=tk.BOTH, expand=True, padx=(12, 0), pady=(0, 8))
-        self.file_scrollbar.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, 8), pady=(0, 8))
+        self.file_listbox.pack(fill=tk.BOTH, expand=True, padx=(S(12), S(0)), pady=(S(0), S(8)))
+        self.file_scrollbar.pack(side=tk.RIGHT, fill=tk.Y, padx=(S(0), S(8)), pady=(S(0), S(8)))
         # 拖拽提示（仅当列表为空时可见）
         dnd_hint = "拖拽PDF文件到此处" if HAS_DND else ""
         self.file_listbox.insert(tk.END, dnd_hint)
         self.file_listbox.itemconfig(0, fg=Theme.FG_DIM)
         self._dnd_hint_index = 0
         f = tk.Frame(self.card_files, bg=Theme.BG_CARD)
-        f.pack(fill=tk.X, padx=12, pady=(0, 10))
-        self.btn_add_files.pack(side=tk.LEFT, padx=(0, 8))
-        self.btn_add_folder.pack(side=tk.LEFT, padx=(0, 6))
-        self.btn_remove.pack(side=tk.LEFT, padx=(0, 6))
+        f.pack(fill=tk.X, padx=S(12), pady=(S(0), S(10)))
+        self.btn_add_files.pack(side=tk.LEFT, padx=(S(0), S(8)))
+        self.btn_add_folder.pack(side=tk.LEFT, padx=(S(0), S(6)))
+        self.btn_remove.pack(side=tk.LEFT, padx=(S(0), S(6)))
         self.btn_clear.pack(side=tk.LEFT)
         self.file_count_label.pack(side=tk.RIGHT)
 
     def _layout_output_card(self):
         f = tk.Frame(self.card_output, bg=Theme.BG_CARD)
-        f.pack(fill=tk.X, padx=12, pady=(0, 4))
+        f.pack(fill=tk.X, padx=S(12), pady=(S(0), S(4)))
         tk.Label(f, text="输出目录：", bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                 font=("Segoe UI", 10)).pack(side=tk.LEFT)
-        self.output_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 8))
+                 font=F(10)).pack(side=tk.LEFT)
+        self.output_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(S(8), S(8)))
         self.btn_browse.pack(side=tk.LEFT)
-        self.cb_replace_source.pack(anchor=tk.W, padx=12, pady=(0, 10))
+        self.cb_replace_source.pack(anchor=tk.W, padx=S(12), pady=(S(0), S(10)))
 
     def _layout_func_mode_card(self):
         # 说明行先占掉最下面一条，六个按钮再从左往右排，长流水线名就不会被卡片右边裁掉
-        self.func_mode_desc_label.pack(side=tk.BOTTOM, anchor=tk.W, padx=12, pady=(4, 6))
+        self.func_mode_desc_label.pack(side=tk.BOTTOM, anchor=tk.W, padx=S(12), pady=(S(4), S(6)))
         for i, cb in enumerate(self.func_mode_checks):
-            cb.pack(side=tk.LEFT, padx=(12, 8) if i == 0 else (0, 8), pady=2)
+            cb.pack(side=tk.LEFT, padx=(S(12), S(8)) if i == 0 else (0, 8), pady=S(2))
 
     def _layout_mode_card(self):
         f = tk.Frame(self.card_mode, bg=Theme.BG_CARD)
-        f.pack(fill=tk.X, padx=12, pady=(0, 10))
+        f.pack(fill=tk.X, padx=S(12), pady=(S(0), S(10)))
         for rb in self.mode_radios:
-            rb.pack(side=tk.LEFT, padx=(0, 8), pady=2)
-        self.mode_desc_label.pack(anchor=tk.W, padx=(12, 0), pady=(4, 6))
+            rb.pack(side=tk.LEFT, padx=(S(0), S(8)), pady=S(2))
+        self.mode_desc_label.pack(anchor=tk.W, padx=(S(12), S(0)), pady=(S(4), S(6)))
 
     def _layout_settings_card(self):
-        self.btn_toggle_settings.pack(fill=tk.X, padx=(8, 8), pady=(8, 0))
+        self.btn_toggle_settings.pack(fill=tk.X, padx=(S(8), S(8)), pady=(S(8), S(0)))
 
     def _layout_settings_content(self):
-        self.settings_content.pack(fill=tk.X, padx=12, pady=(8, 12))
-        self.lbl_bottom.grid(row=0, column=0, sticky=tk.W, padx=(0, 8), pady=4)
-        self.scale_bottom.grid(row=0, column=1, sticky=tk.EW, pady=4)
-        self.lbl_bottom_val.grid(row=0, column=2, padx=(8, 0), pady=4)
-        self.lbl_top.grid(row=1, column=0, sticky=tk.W, padx=(0, 8), pady=4)
-        self.scale_top.grid(row=1, column=1, sticky=tk.EW, pady=4)
-        self.lbl_top_val.grid(row=1, column=2, padx=(8, 0), pady=4)
-        self.lbl_dpi.grid(row=2, column=0, sticky=tk.W, padx=(0, 8), pady=4)
-        self.spin_dpi.grid(row=2, column=1, sticky=tk.W, pady=4)
-        self.cb_side.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=4)
-        self.cb_seal.grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=4)
+        self.settings_content.pack(fill=tk.X, padx=S(12), pady=(S(8), S(12)))
+        self.lbl_bottom.grid(row=0, column=0, sticky=tk.W, padx=(S(0), S(8)), pady=S(4))
+        self.scale_bottom.grid(row=0, column=1, sticky=tk.EW, pady=S(4))
+        self.lbl_bottom_val.grid(row=0, column=2, padx=(S(8), S(0)), pady=S(4))
+        self.lbl_top.grid(row=1, column=0, sticky=tk.W, padx=(S(0), S(8)), pady=S(4))
+        self.scale_top.grid(row=1, column=1, sticky=tk.EW, pady=S(4))
+        self.lbl_top_val.grid(row=1, column=2, padx=(S(8), S(0)), pady=S(4))
+        self.lbl_dpi.grid(row=2, column=0, sticky=tk.W, padx=(S(0), S(8)), pady=S(4))
+        self.spin_dpi.grid(row=2, column=1, sticky=tk.W, pady=S(4))
+        self.cb_side.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=S(4))
+        self.cb_seal.grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=S(4))
+        self.cb_close_ask.grid(row=5, column=0, columnspan=2, sticky=tk.W, pady=S(4))
         self.settings_content.columnconfigure(1, weight=1)
 
     def _layout_scale_card(self):
         """布局缩放控制卡片（对齐缩放 / 等比缩放 / 根据边距缩放三种方式）"""
         # 缩放方式选择行
-        self.scale_mode_frame.pack(fill=tk.X, padx=12, pady=(8, 2))
-        self.rb_scale_align_mode.pack(side=tk.LEFT, padx=(0, 6), pady=2)
-        self.rb_scale_uniform_mode.pack(side=tk.LEFT, padx=(0, 6), pady=2)
-        self.rb_scale_stretch_mode.pack(side=tk.LEFT, padx=(0, 6), pady=2)
-        self.scale_mode_hint.pack(fill=tk.X, anchor=tk.W, padx=12, pady=(2, 6))
+        self.scale_mode_frame.pack(fill=tk.X, padx=S(12), pady=(S(8), S(2)))
+        self.rb_scale_align_mode.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
+        self.rb_scale_uniform_mode.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
+        self.rb_scale_stretch_mode.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
+        self.scale_mode_hint.pack(fill=tk.X, anchor=tk.W, padx=S(12), pady=(S(2), S(6)))
 
         if self._use_fit_spec():
             self._pack_margin_rows()
@@ -1308,45 +1352,45 @@ class PDFPageNumberRemoverGUI:
         self._forget_ratio_rows()
 
         # 比例控制行
-        self.scale_control_frame.pack(fill=tk.X, padx=12, pady=(4, 4))
+        self.scale_control_frame.pack(fill=tk.X, padx=S(12), pady=(S(4), S(4)))
 
         # -按钮
-        self.btn_scale_minus.pack(side=tk.LEFT, padx=(0, 4))
+        self.btn_scale_minus.pack(side=tk.LEFT, padx=(S(0), S(4)))
         # 滑块
-        self.scale_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        self.scale_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=S(4))
         # +按钮
-        self.btn_scale_plus.pack(side=tk.LEFT, padx=(4, 8))
+        self.btn_scale_plus.pack(side=tk.LEFT, padx=(S(4), S(8)))
         # 百分比显示
         self.scale_ratio_label.pack(side=tk.LEFT)
 
         # 预设比例按钮行
-        self.scale_presets_frame.pack(fill=tk.X, padx=12, pady=(2, 6))
+        self.scale_presets_frame.pack(fill=tk.X, padx=S(12), pady=(S(2), S(6)))
         for btn in self.scale_preset_buttons:
-            btn.pack(side=tk.LEFT, padx=(0, 4))
+            btn.pack(side=tk.LEFT, padx=(S(0), S(4)))
         self._update_preset_button_styles()
 
         # 内容偏移控制区
-        self.offset_frame.pack(fill=tk.X, padx=12, pady=(0, 10))
-        self.offset_title_label.pack(anchor=tk.W, pady=(0, 2))
+        self.offset_frame.pack(fill=tk.X, padx=S(12), pady=(S(0), S(10)))
+        self.offset_title_label.pack(anchor=tk.W, pady=(S(0), S(2)))
 
         # 水平偏移行
-        self.offset_x_frame.pack(fill=tk.X, pady=(0, 2))
-        self.offset_x_label.pack(side=tk.LEFT, padx=(0, 4))
-        self.btn_offset_x_minus.pack(side=tk.LEFT, padx=(0, 2))
-        self.offset_x_spinbox.pack(side=tk.LEFT, padx=(0, 2))
-        self.btn_offset_x_plus.pack(side=tk.LEFT, padx=(0, 2))
-        self.offset_x_unit.pack(side=tk.LEFT, padx=(2, 0))
+        self.offset_x_frame.pack(fill=tk.X, pady=(S(0), S(2)))
+        self.offset_x_label.pack(side=tk.LEFT, padx=(S(0), S(4)))
+        self.btn_offset_x_minus.pack(side=tk.LEFT, padx=(S(0), S(2)))
+        self.offset_x_spinbox.pack(side=tk.LEFT, padx=(S(0), S(2)))
+        self.btn_offset_x_plus.pack(side=tk.LEFT, padx=(S(0), S(2)))
+        self.offset_x_unit.pack(side=tk.LEFT, padx=(S(2), S(0)))
 
         # 垂直偏移行
-        self.offset_y_frame.pack(fill=tk.X, pady=(0, 2))
-        self.offset_y_label.pack(side=tk.LEFT, padx=(0, 4))
-        self.btn_offset_y_minus.pack(side=tk.LEFT, padx=(0, 2))
-        self.offset_y_spinbox.pack(side=tk.LEFT, padx=(0, 2))
-        self.btn_offset_y_plus.pack(side=tk.LEFT, padx=(0, 2))
-        self.offset_y_unit.pack(side=tk.LEFT, padx=(2, 0))
+        self.offset_y_frame.pack(fill=tk.X, pady=(S(0), S(2)))
+        self.offset_y_label.pack(side=tk.LEFT, padx=(S(0), S(4)))
+        self.btn_offset_y_minus.pack(side=tk.LEFT, padx=(S(0), S(2)))
+        self.offset_y_spinbox.pack(side=tk.LEFT, padx=(S(0), S(2)))
+        self.btn_offset_y_plus.pack(side=tk.LEFT, padx=(S(0), S(2)))
+        self.offset_y_unit.pack(side=tk.LEFT, padx=(S(2), S(0)))
 
         # 重置偏移按钮
-        self.btn_offset_reset.pack(anchor=tk.E, pady=(0, 2))
+        self.btn_offset_reset.pack(anchor=tk.E, pady=(S(0), S(2)))
 
     def _pack_margin_rows(self):
         """显示"按边距摆放"三档共用的控件行：子选项 + 距离 + 对齐 + 比例 + 跳过"""
@@ -1355,68 +1399,68 @@ class PDFPageNumberRemoverGUI:
         kind = self.scale_mode_var.get()
 
         if kind == "uniform":
-            self.uniform_axis_frame.pack(fill=tk.X, padx=12, pady=(4, 2))
-            self.rb_uniform_v.pack(side=tk.LEFT, padx=(0, 6), pady=2)
-            self.rb_uniform_h.pack(side=tk.LEFT, padx=(0, 6), pady=2)
-            self.rb_uniform_free.pack(side=tk.LEFT, padx=(0, 6), pady=2)
+            self.uniform_axis_frame.pack(fill=tk.X, padx=S(12), pady=(S(4), S(2)))
+            self.rb_uniform_v.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
+            self.rb_uniform_h.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
+            self.rb_uniform_free.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
         elif kind == "stretch":
-            self.stretch_axis_frame.pack(fill=tk.X, padx=12, pady=(4, 2))
-            self.rb_stretch_h.pack(side=tk.LEFT, padx=(0, 6), pady=2)
-            self.rb_stretch_v.pack(side=tk.LEFT, padx=(0, 6), pady=2)
-            self.rb_stretch_custom.pack(side=tk.LEFT, padx=(0, 6), pady=2)
+            self.stretch_axis_frame.pack(fill=tk.X, padx=S(12), pady=(S(4), S(2)))
+            self.rb_stretch_h.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
+            self.rb_stretch_v.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
+            self.rb_stretch_custom.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
 
-        self.fit_margin_frame.pack(fill=tk.X, padx=12, pady=(4, 4))
+        self.fit_margin_frame.pack(fill=tk.X, padx=S(12), pady=(S(4), S(4)))
         self.fit_top_label.pack(side=tk.LEFT)
-        self.fit_top_entry.pack(side=tk.LEFT, padx=(0, 16))
+        self.fit_top_entry.pack(side=tk.LEFT, padx=(S(0), S(16)))
         self.fit_bottom_label.pack(side=tk.LEFT)
         self.fit_bottom_entry.pack(side=tk.LEFT)
 
-        self.fit_side_frame.pack(fill=tk.X, padx=12, pady=(2, 4))
+        self.fit_side_frame.pack(fill=tk.X, padx=S(12), pady=(S(2), S(4)))
         self.cb_fit_side.pack(side=tk.LEFT)
-        self.fit_side_cm_entry.pack(side=tk.LEFT, padx=(8, 8))
+        self.fit_side_cm_entry.pack(side=tk.LEFT, padx=(S(8), S(8)))
         self.fit_side_hint.pack(side=tk.LEFT)
         if self._side_locked():
             self.fit_side_var.set(True)
         self._set_side_state(self.fit_side_var.get())
 
-        self.fit_mode_frame.pack(fill=tk.X, padx=12, pady=(4, 4))
-        self.rb_fit_top.pack(side=tk.LEFT, padx=(0, 6), pady=2)
-        self.rb_fit_bottom.pack(side=tk.LEFT, padx=(0, 6), pady=2)
-        self.rb_fit_both.pack(side=tk.LEFT, padx=(0, 6), pady=2)
+        self.fit_mode_frame.pack(fill=tk.X, padx=S(12), pady=(S(4), S(4)))
+        self.rb_fit_top.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
+        self.rb_fit_bottom.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
+        self.rb_fit_both.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
 
         if kind == "align":
-            self.fit_pre_frame.pack(fill=tk.X, padx=12, pady=(2, 4))
+            self.fit_pre_frame.pack(fill=tk.X, padx=S(12), pady=(S(2), S(4)))
             self.fit_pre_label.pack(side=tk.LEFT)
-            self.fit_pre_spinbox.pack(side=tk.LEFT, padx=(0, 8))
+            self.fit_pre_spinbox.pack(side=tk.LEFT, padx=(S(0), S(8)))
             self.fit_pre_hint.pack(side=tk.LEFT)
             self._set_pre_scale_state(self.fit_mode_var.get() != "both")
         elif kind == "stretch":
-            self.stretch_ratio_frame.pack(fill=tk.X, padx=12, pady=(2, 4))
+            self.stretch_ratio_frame.pack(fill=tk.X, padx=S(12), pady=(S(2), S(4)))
             axis = self.stretch_axis_var.get()
             if axis in ("v", "custom"):
                 self.stretch_x_label.pack(side=tk.LEFT)
-                self.stretch_x_spinbox.pack(side=tk.LEFT, padx=(0, 12))
+                self.stretch_x_spinbox.pack(side=tk.LEFT, padx=(S(0), S(12)))
             if axis in ("h", "custom"):
                 self.stretch_y_label.pack(side=tk.LEFT)
-                self.stretch_y_spinbox.pack(side=tk.LEFT, padx=(0, 12))
+                self.stretch_y_spinbox.pack(side=tk.LEFT, padx=(S(0), S(12)))
             self.stretch_ratio_hint.pack(side=tk.LEFT)
             self.stretch_ratio_hint.config(
                 text=("水平方向的大小由左右边距决定，只有上下比例起作用" if axis == "h" else
                       "垂直方向的大小由上下边距决定，只有左右比例起作用" if axis == "v" else
                       "左右、上下各按填写的比例缩放，页面尺寸不变"))
 
-        self.fit_skip_frame.pack(fill=tk.X, padx=12, pady=(4, 2))
+        self.fit_skip_frame.pack(fill=tk.X, padx=S(12), pady=(S(4), S(2)))
         self.cb_fit_auto_skip.pack(side=tk.LEFT)
-        self.fit_small_label.pack(side=tk.LEFT, padx=(16, 2))
+        self.fit_small_label.pack(side=tk.LEFT, padx=(S(16), S(2)))
         self.fit_small_entry.pack(side=tk.LEFT)
         self._set_small_ratio_state(self.fit_auto_skip_var.get())
 
-        self.fit_skip_pages_frame.pack(fill=tk.X, padx=12, pady=(2, 2))
+        self.fit_skip_pages_frame.pack(fill=tk.X, padx=S(12), pady=(S(2), S(2)))
         self.fit_skip_pages_label.pack(side=tk.LEFT)
-        self.fit_skip_pages_entry.pack(side=tk.LEFT, padx=(0, 8))
+        self.fit_skip_pages_entry.pack(side=tk.LEFT, padx=(S(0), S(8)))
         self.fit_skip_pages_hint.pack(side=tk.LEFT)
 
-        self.fit_hint.pack(fill=tk.X, anchor=tk.W, padx=12, pady=(0, 10))
+        self.fit_hint.pack(fill=tk.X, anchor=tk.W, padx=S(12), pady=(S(0), S(10)))
         self.fit_hint.config(text={
             "align": self.FIT_HINT_ALIGN,
             "uniform": self.FIT_HINT_UNIFORM,
@@ -1440,28 +1484,28 @@ class PDFPageNumberRemoverGUI:
         # pack 一个已在打包列表里的 widget 不会把它移到末尾，
         # 切换缩放方式时设置行是重新打包的，所以预览必须先 forget 再 pack 才能保持在最下方
         self.preview_frame.pack_forget()
-        self.preview_frame.pack(fill=tk.X, padx=12, pady=(4, 10))
+        self.preview_frame.pack(fill=tk.X, padx=S(12), pady=(S(4), S(10)))
 
         # 预览标题行
-        self.preview_title_frame.pack(fill=tk.X, pady=(0, 4))
+        self.preview_title_frame.pack(fill=tk.X, pady=(S(0), S(4)))
         self.preview_label_title.pack(side=tk.LEFT)
 
         # 预览页面导航
         self.preview_nav_frame.pack(side=tk.RIGHT)
-        self.preview_page_label.pack(side=tk.LEFT, padx=(0, 4))
+        self.preview_page_label.pack(side=tk.LEFT, padx=(S(0), S(4)))
         self.btn_preview_prev.pack(side=tk.LEFT)
-        self.preview_page_entry.pack(side=tk.LEFT, padx=2)
-        self.btn_preview_goto.pack(side=tk.LEFT, padx=(0, 2))
-        self.btn_preview_next.pack(side=tk.LEFT, padx=(0, 2))
-        self.preview_total_label.pack(side=tk.LEFT, padx=(4, 0))
+        self.preview_page_entry.pack(side=tk.LEFT, padx=S(2))
+        self.btn_preview_goto.pack(side=tk.LEFT, padx=(S(0), S(2)))
+        self.btn_preview_next.pack(side=tk.LEFT, padx=(S(0), S(2)))
+        self.preview_total_label.pack(side=tk.LEFT, padx=(S(4), S(0)))
 
         # 预览画布（居中）
-        self.preview_canvas_frame.pack(fill=tk.X, pady=(0, 4))
+        self.preview_canvas_frame.pack(fill=tk.X, pady=(S(0), S(4)))
         self.preview_canvas.pack(anchor=tk.CENTER)
 
         # 按边距摆放的模式才需要说明红色参考线
         if self._use_fit_spec():
-            self.preview_fit_note.pack(anchor=tk.W, pady=(0, 4))
+            self.preview_fit_note.pack(anchor=tk.W, pady=(S(0), S(4)))
             self._update_fit_skip_note()
         else:
             self.preview_fit_note.pack_forget()
@@ -1639,50 +1683,50 @@ class PDFPageNumberRemoverGUI:
 
     def _layout_page_range_card(self):
         f = tk.Frame(self.card_page_range, bg=Theme.BG_CARD)
-        f.pack(fill=tk.X, padx=12, pady=(0, 10))
+        f.pack(fill=tk.X, padx=S(12), pady=(S(0), S(10)))
         tk.Label(f, text="指定页面：", bg=Theme.BG_CARD, fg=Theme.FG_DIM,
-                 font=("Segoe UI", 10)).pack(side=tk.LEFT)
-        self.page_range_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 8))
-        self.page_range_hint.pack(anchor=tk.W, padx=12, pady=(0, 8))
+                 font=F(10)).pack(side=tk.LEFT)
+        self.page_range_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(S(8), S(8)))
+        self.page_range_hint.pack(anchor=tk.W, padx=S(12), pady=(S(0), S(8)))
 
     def _layout_rotate_card(self):
         f = tk.Frame(self.card_rotate, bg=Theme.BG_CARD)
-        f.pack(fill=tk.X, padx=12, pady=(0, 6))
-        self.rb_rotate_cw.pack(side=tk.LEFT, padx=(0, 6), pady=2)
-        self.rb_rotate_ccw.pack(side=tk.LEFT, padx=(0, 6), pady=2)
-        self.cb_rotate_auto.pack(side=tk.LEFT, padx=(8, 0), pady=2)
+        f.pack(fill=tk.X, padx=S(12), pady=(S(0), S(6)))
+        self.rb_rotate_cw.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
+        self.rb_rotate_ccw.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
+        self.cb_rotate_auto.pack(side=tk.LEFT, padx=(S(8), S(0)), pady=S(2))
 
     def _layout_resize_card(self):
         # 目标尺寸行
-        self.resize_size_frame.pack(fill=tk.X, padx=12, pady=(8, 10))
-        self.resize_size_label.pack(side=tk.LEFT, padx=(0, 8))
+        self.resize_size_frame.pack(fill=tk.X, padx=S(12), pady=(S(8), S(10)))
+        self.resize_size_label.pack(side=tk.LEFT, padx=(S(0), S(8)))
         self.resize_size_combo.pack(side=tk.LEFT)
 
     def _layout_logo_card(self):
-        self.logo_anchor_frame.pack(fill=tk.X, padx=12, pady=(8, 4))
-        self.logo_anchor_label.pack(side=tk.LEFT, padx=(0, 8))
+        self.logo_anchor_frame.pack(fill=tk.X, padx=S(12), pady=(S(8), S(4)))
+        self.logo_anchor_label.pack(side=tk.LEFT, padx=(S(0), S(8)))
         for rb in self.logo_anchor_radios:
-            rb.pack(side=tk.LEFT, padx=(0, 6), pady=2)
+            rb.pack(side=tk.LEFT, padx=(S(0), S(6)), pady=S(2))
 
-        self.logo_zone_frame.pack(fill=tk.X, padx=12, pady=4)
+        self.logo_zone_frame.pack(fill=tk.X, padx=S(12), pady=S(4))
         for w in (self.logo_zone_w_label, self.logo_zone_w_entry,
                   self.logo_zone_h_label, self.logo_zone_h_entry,
                   self.logo_presence_label, self.logo_presence_entry):
-            w.pack(side=tk.LEFT, padx=(0, 8), pady=2)
+            w.pack(side=tk.LEFT, padx=(S(0), S(8)), pady=S(2))
 
-        self.logo_row_frame.pack(fill=tk.X, padx=12, pady=4)
+        self.logo_row_frame.pack(fill=tk.X, padx=S(12), pady=S(4))
         self.logo_whole_row_check.pack(anchor=tk.W)
         self.logo_row_hint_label.pack(anchor=tk.W)
 
-        self.logo_hint_label.pack(anchor=tk.W, padx=12, pady=(4, 10))
+        self.logo_hint_label.pack(anchor=tk.W, padx=S(12), pady=(S(4), S(10)))
 
     def _layout_progress_card(self):
-        self.progress_bar.pack(fill=tk.X, padx=12, pady=(0, 6))
+        self.progress_bar.pack(fill=tk.X, padx=S(12), pady=(S(0), S(6)))
         sf = tk.Frame(self.card_progress, bg=Theme.BG_CARD)
-        sf.pack(fill=tk.X, padx=12, pady=(0, 6))
+        sf.pack(fill=tk.X, padx=S(12), pady=(S(0), S(6)))
         self.status_icon.pack(side=tk.LEFT)
-        self.status_label.pack(side=tk.LEFT, padx=(6, 0))
-        self.log_text.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 10))
+        self.status_label.pack(side=tk.LEFT, padx=(S(6), S(0)))
+        self.log_text.pack(fill=tk.BOTH, expand=True, padx=S(12), pady=(S(0), S(10)))
 
     # ========== 交互方法 ==========
     def _get_selected_funcs(self) -> list:
@@ -1730,31 +1774,31 @@ class PDFPageNumberRemoverGUI:
         # 页面范围卡片 - 去除页码、旋转、缩放、尺寸调整、去瑕疵、去Logo时显示
         if any(f in selected for f in ("remove_page_numbers", "pdf_scale", "pdf_rotate",
                                        "pdf_resize", "clean_scan", "remove_logo")):
-            self.card_page_range.pack(fill=tk.X, padx=(0, 16), pady=6,
+            self.card_page_range.pack(fill=tk.X, padx=(S(0), S(16)), pady=S(6),
                                        after=prev_card, before=self.card_settings)
             prev_card = self.card_page_range
 
         # 仅在去除页码选中时显示页码去除模式卡片
         if "remove_page_numbers" in selected:
-            self.card_mode.pack(fill=tk.X, padx=(0, 16), pady=6,
+            self.card_mode.pack(fill=tk.X, padx=(S(0), S(16)), pady=S(6),
                                 after=prev_card, before=self.card_settings)
             prev_card = self.card_mode
 
         # 自动旋转卡片
         if "pdf_rotate" in selected:
-            self.card_rotate.pack(fill=tk.X, padx=(0, 16), pady=6,
+            self.card_rotate.pack(fill=tk.X, padx=(S(0), S(16)), pady=S(6),
                                    after=prev_card, before=self.card_settings)
             prev_card = self.card_rotate
 
         # 页面尺寸调整卡片
         if "pdf_resize" in selected:
-            self.card_resize.pack(fill=tk.X, padx=(0, 16), pady=6,
+            self.card_resize.pack(fill=tk.X, padx=(S(0), S(16)), pady=S(6),
                                    after=prev_card, before=self.card_settings)
             prev_card = self.card_resize
 
         # 缩放控制卡片（内含按比例/按边距两种缩放方式）
         if "pdf_scale" in selected:
-            self.card_scale.pack(fill=tk.X, padx=(0, 16), pady=6,
+            self.card_scale.pack(fill=tk.X, padx=(S(0), S(16)), pady=S(6),
                                   after=prev_card, before=self.card_settings)
             self._update_scale_mode_hint()
             self.root.after(300, self._load_preview_pdf)
@@ -1762,7 +1806,7 @@ class PDFPageNumberRemoverGUI:
 
         # 页眉Logo设置卡片
         if "remove_logo" in selected:
-            self.card_logo.pack(fill=tk.X, padx=(0, 16), pady=6,
+            self.card_logo.pack(fill=tk.X, padx=(S(0), S(16)), pady=S(6),
                                 after=prev_card, before=self.card_settings)
 
         # 更新输出目录默认值
@@ -1890,20 +1934,20 @@ class PDFPageNumberRemoverGUI:
     def _apply_choice_widget_style(self, w):
         """选项按钮的唯一样式来源：选中 / 悬停 / 普通三态"""
         if self._choice_selected(w):
-            bg, fg, font = Theme.ACCENT, "#ffffff", ("Segoe UI", 10, "bold")
+            bg, fg, font = Theme.ACCENT, "#ffffff", F(10, "bold")
             abg, afg = Theme.ACCENT_HOVER, "#ffffff"
         elif w._hovered:
-            bg, fg, font = Theme.BORDER, Theme.FG, ("Segoe UI", 10)
+            bg, fg, font = Theme.BORDER, Theme.FG, F(10)
             abg, afg = Theme.BORDER, Theme.FG
         else:
-            bg, fg, font = Theme.BG_CARD, Theme.FG, ("Segoe UI", 10)
+            bg, fg, font = Theme.BG_CARD, Theme.FG, F(10)
             abg, afg = Theme.BG_CARD, Theme.FG
         # 文本恒定，选中态不添加 ✓ 前缀，避免按钮宽度在切换时跳动
         # indicatoron=0 时 Tk 用 selectcolor 作为选中态底色，必须和 bg 一起设
         w.config(text=w._choice_text, bg=bg, fg=fg, font=font, selectcolor=bg,
                  activebackground=abg, activeforeground=afg,
                  relief=tk.FLAT, bd=0, highlightthickness=0,
-                 indicatoron=0, cursor="hand2", padx=14, pady=7)
+                 indicatoron=0, cursor="hand2", padx=S(14), pady=S(7))
 
     def _apply_choice_group_style(self, widgets):
         for w in widgets:
@@ -1941,8 +1985,8 @@ class PDFPageNumberRemoverGUI:
                               selectcolor=Theme.ACCENT,
                               activebackground=Theme.BG_CARD,
                               activeforeground=Theme.ACCENT,
-                              font=("Segoe UI", 10), cursor="hand2",
-                              highlightthickness=0, anchor=tk.W, pady=2)
+                              font=F(10), cursor="hand2",
+                              highlightthickness=0, anchor=tk.W, pady=S(2))
 
     def _update_scale_mode_hint(self):
         """缩放方式下方的说明文字"""
@@ -2021,6 +2065,7 @@ class PDFPageNumberRemoverGUI:
         "uniform_axis_var": ("v", "h", "free"),
         "stretch_axis_var": ("h", "v", "custom"),
         "rotate_direction_var": ("clockwise", "counterclockwise"),
+        "close_action_var": ("quit", "tray"),
         "logo_anchor_var": tuple(LogoConfig.ANCHOR_LABELS.keys()),
     }
     # 厘米/百分比这类手打数字框：恢复前先确认还是个数，别让坏数据把预览卡住
@@ -2195,12 +2240,115 @@ class PDFPageNumberRemoverGUI:
             self._tray_icon = None
 
     def _on_window_close(self):
-        """点击窗口X号时隐藏到托盘"""
+        """点窗口 X 号时先问一句：退出程序，还是收进托盘。
+
+        不问的话，用户以为关了其实还挂在右下角，下次双击又起一个，
+        任务栏里能攒出好几个小图标。
+        """
+        if not self._tray_icon:
+            # 托盘根本没起来（缺 pystray），后台驻留没意义，直接退
+            self._save_settings()
+            self._quit_app()
+            return
+        if self.close_ask_var.get():
+            action = self._ask_close_action()
+            if action is None:
+                return
+        else:
+            action = self.close_action_var.get()
         self._save_settings()
-        if self._tray_icon:
+        if action == "tray":
             self.root.withdraw()
         else:
             self._quit_app()
+
+    CLOSE_QUESTION = "窗口关闭后，程序要怎么办？"
+    CLOSE_OPT_QUIT = "退出程序 —— 彻底关掉，右下角不留小图标"
+    CLOSE_OPT_TRAY = "收进托盘 —— 只关窗口，批量任务继续在后台跑"
+    CLOSE_TRAY_HINT = "回来方法：双击右下角小图标，或右键选「显示窗口」"
+    CLOSE_REMEMBER = "不再提示，以后按上面选的做（想改：高级设置 → 关闭时先问我）"
+
+    def _ask_close_action(self):
+        """关闭方式的询问框；返回 "quit" / "tray"，点「取消」或关掉询问框返回 None"""
+        top = tk.Toplevel(self.root)
+        top.title("关闭 PDF Tool")
+        top.configure(bg=Theme.BG_CARD)
+        top.resizable(False, False)
+        top.transient(self.root)
+
+        picked = tk.StringVar(value=self.close_action_var.get() or "quit")
+        remember = tk.BooleanVar(value=False)
+        answer = {"action": None, "closed": False}
+
+        tk.Label(top, text=self.CLOSE_QUESTION, bg=Theme.BG_CARD, fg=Theme.FG,
+                 font=F(12, "bold"), justify=tk.LEFT).pack(anchor=tk.W, padx=S(18),
+                                                            pady=(S(16), S(8)))
+
+        # 选项直接用主界面那套选择按钮（选中=蓝底白字），不重造样式
+        rb_quit, rb_tray = self._make_choice_group(
+            top, [(self.CLOSE_OPT_QUIT, "quit"), (self.CLOSE_OPT_TRAY, "tray")], picked)
+        for rb in (rb_quit, rb_tray):
+            rb.pack(anchor=tk.W, padx=S(18), pady=S(3))
+
+        tk.Label(top, text=self.CLOSE_TRAY_HINT, bg=Theme.BG_CARD, fg=Theme.FG_DIM,
+                 font=F(9), justify=tk.LEFT).pack(anchor=tk.W, padx=S(32), pady=(S(2), S(6)))
+
+        cb_remember = tk.Checkbutton(top, text=self.CLOSE_REMEMBER, variable=remember,
+                                     bg=Theme.BG_CARD, fg=Theme.FG_DIM,
+                                     selectcolor=Theme.ACCENT,
+                                     activebackground=Theme.BG_CARD,
+                                     activeforeground=Theme.ACCENT,
+                                     font=F(9), justify=tk.LEFT, anchor=tk.W,
+                                     cursor="hand2", highlightthickness=0, wraplength=S(400))
+        cb_remember.pack(anchor=tk.W, padx=S(18), pady=(S(6), S(12)))
+
+        btns = tk.Frame(top, bg=Theme.BG_CARD)
+        btns.pack(fill=tk.X, padx=S(18), pady=(S(0), S(16)))
+
+        def accept(*_a):
+            if answer["closed"]:
+                return
+            answer["closed"] = True
+            action = picked.get()
+            if action not in ("quit", "tray"):
+                action = "quit"
+            self.close_action_var.set(action)
+            if remember.get():
+                self.close_ask_var.set(False)
+            answer["action"] = action
+            top.destroy()
+
+        def decline(*_a):
+            answer["closed"] = True
+            top.destroy()
+
+        for text, style, cmd, side in (
+            ("确定", "Accent.TButton", accept, tk.RIGHT),
+            ("取消", "Secondary.TButton", decline, tk.LEFT),
+        ):
+            ttk.Button(btns, text=text, style=style, command=cmd).pack(side=side, padx=S(4))
+
+        top.protocol("WM_DELETE_WINDOW", decline)
+        top.bind("<Return>", accept)
+        top.bind("<KP_Enter>", accept)
+        top.bind("<Escape>", decline)
+
+        top.update_idletasks()
+        pw, ph = self.root.winfo_width(), self.root.winfo_height()
+        px, py = self.root.winfo_rootx(), self.root.winfo_rooty()
+        w, h = top.winfo_reqwidth(), top.winfo_reqheight()
+        x = max(0, px + (pw - w) // 2)
+        y = max(0, py + (ph - h) // 3)
+        top.geometry("+%d+%d" % (x, y))
+        try:
+            top.grab_set()
+        except tk.TclError:
+            pass
+        # 焦点给询问框本身而不是某个单选钮：Tk 会在获得焦点的控件里画一圈虚线，
+        # 一开框就带个虚线框看着像坏了，键盘 Tab 仍然能走到选项上
+        top.focus_force()
+        self.root.wait_window(top)
+        return answer["action"]
 
     def _show_window(self, icon=None, item=None):
         """从托盘恢复显示窗口"""
@@ -2344,12 +2492,12 @@ class PDFPageNumberRemoverGUI:
                 btn.config(fg="#ffffff", bg=Theme.ACCENT,
                            activebackground=Theme.ACCENT_HOVER,
                            activeforeground="#ffffff",
-                           font=("Segoe UI", 9, "bold"))
+                           font=F(9, "bold"))
             else:
                 btn.config(fg=Theme.FG, bg=Theme.BG_INPUT,
                            activebackground=Theme.BORDER,
                            activeforeground=Theme.ACCENT,
-                           font=("Segoe UI", 9))
+                           font=F(9))
 
     def _adjust_offset(self, axis: str, delta: int):
         """调整偏移量（axis='x'或'y'，delta为变化值）"""
@@ -2382,7 +2530,7 @@ class PDFPageNumberRemoverGUI:
             canvas_w, canvas_h = self._preview_canvas_w, self._preview_canvas_h
             self.preview_canvas.create_text(
                 canvas_w // 2, canvas_h // 2,
-                text=text, fill=Theme.FG_DIM, font=("Segoe UI", 10)
+                text=text, fill=Theme.FG_DIM, font=F(10)
             )
         except Exception:
             pass
@@ -2428,14 +2576,8 @@ class PDFPageNumberRemoverGUI:
             is_landscape = page.rect.width > page.rect.height
             if is_landscape != self._preview_page_is_landscape:
                 self._preview_page_is_landscape = is_landscape
-                if is_landscape:
-                    # 横向页面：宽Canvas
-                    self._preview_canvas_w = 560
-                    self._preview_canvas_h = 400
-                else:
-                    # 纵向页面：高Canvas
-                    self._preview_canvas_w = 400
-                    self._preview_canvas_h = 560
+                # 横向页面用宽Canvas，纵向页面用高Canvas
+                self._preview_canvas_w, self._preview_canvas_h = _preview_size(is_landscape)
                 self.preview_canvas.config(width=self._preview_canvas_w, height=self._preview_canvas_h)
         except Exception:
             pass
@@ -2460,7 +2602,7 @@ class PDFPageNumberRemoverGUI:
         self.preview_canvas.create_text(
             canvas_w // 2, canvas_h // 2,
             text="请添加PDF文件以预览缩放效果",
-            fill=Theme.FG_DIM, font=("Segoe UI", 10)
+            fill=Theme.FG_DIM, font=F(10)
         )
         self.preview_placeholder.pack_forget()  # 确保旧placeholder隐藏
         self.preview_total_label.config(text="")
@@ -2540,7 +2682,7 @@ class PDFPageNumberRemoverGUI:
                 self.preview_canvas.create_text(
                     canvas_w // 2, canvas_h // 2,
                     text="预览渲染失败",
-                    fill=Theme.FG_DIM, font=("Segoe UI", 10)
+                    fill=Theme.FG_DIM, font=F(10)
                 )
                 return
 
@@ -2587,7 +2729,7 @@ class PDFPageNumberRemoverGUI:
                 self.preview_canvas.create_text(
                     canvas_w // 2, canvas_h // 2,
                     text=f"预览出错: {e}",
-                    fill=Theme.WARNING, font=("Segoe UI", 9)
+                    fill=Theme.WARNING, font=F(9)
                 )
             except Exception:
                 pass
@@ -4313,7 +4455,7 @@ class SplashScreen:
         self.splash.configure(bg=Theme.BG)
 
         # 窗口尺寸与居中
-        width, height = 400, 220
+        width, height = ui_dpi.S(400), ui_dpi.S(220)
         sx = (self.splash.winfo_screenwidth() - width) // 2
         sy = (self.splash.winfo_screenheight() - height) // 2
         self.splash.geometry(f"{width}x{height}+{sx}+{sy}")
@@ -4333,25 +4475,25 @@ class SplashScreen:
     def _create_content(self, width, height):
         # 应用图标/Logo区域
         logo_frame = tk.Frame(self.splash, bg=Theme.BG)
-        logo_frame.pack(expand=True, fill=tk.BOTH, padx=30, pady=(30, 0))
+        logo_frame.pack(expand=True, fill=tk.BOTH, padx=S(30), pady=(S(30), S(0)))
 
         # 标题
         tk.Label(logo_frame, text="PDF Tool", bg=Theme.BG,
-                 fg=Theme.ACCENT, font=("Segoe UI", 22, "bold")).pack(pady=(0, 4))
+                 fg=Theme.ACCENT, font=F(22, "bold")).pack(pady=(S(0), S(4)))
 
         # 副标题
         tk.Label(logo_frame, text="多功能组合 · 去页码 · 内容缩放 · 统一尺寸 · 自动旋转 · 去扫描边瑕 · 去页眉标识", bg=Theme.BG,
-                 fg=Theme.FG_DIM, font=("Segoe UI", 10)).pack(pady=(0, 16))
+                 fg=Theme.FG_DIM, font=F(10)).pack(pady=(S(0), S(16)))
 
         # Canvas 用于绘制旋转动画
-        self.canvas = tk.Canvas(self.splash, width=36, height=36,
+        self.canvas = tk.Canvas(self.splash, width=ui_dpi.S(36), height=ui_dpi.S(36),
                                 bg=Theme.BG, highlightthickness=0)
-        self.canvas.pack(pady=(0, 8))
+        self.canvas.pack(pady=(S(0), S(8)))
 
         # 加载文字
         self.loading_label = tk.Label(self.splash, text="正在加载...", bg=Theme.BG,
-                                       fg=Theme.FG_DIM, font=("Segoe UI", 9))
-        self.loading_label.pack(pady=(0, 16))
+                                       fg=Theme.FG_DIM, font=F(9))
+        self.loading_label.pack(pady=(S(0), S(16)))
 
         # 底部装饰线
         deco = tk.Frame(self.splash, bg=Theme.ACCENT, height=2)
@@ -4362,19 +4504,20 @@ class SplashScreen:
         if not self.running:
             return
         self.canvas.delete("all")
-        cx, cy, r = 18, 18, 14
+        cx = cy = ui_dpi.S(18)
+        r = ui_dpi.S(14)
         # 绘制背景圆环
         self.canvas.create_oval(cx - r, cy - r, cx + r, cy + r,
-                                outline=Theme.BORDER, width=3)
+                                outline=Theme.BORDER, width=ui_dpi.S(3))
         # 绘制旋转弧线
         start = self.angle
         self.canvas.create_arc(cx - r, cy - r, cx + r, cy + r,
                                start=start, extent=90,
-                               style=tk.ARC, outline=Theme.ACCENT, width=3)
+                               style=tk.ARC, outline=Theme.ACCENT, width=ui_dpi.S(3))
         # 绘制尾部弧线（渐淡效果）
         self.canvas.create_arc(cx - r, cy - r, cx + r, cy + r,
                                start=start + 90, extent=40,
-                               style=tk.ARC, outline=Theme.BORDER, width=2)
+                               style=tk.ARC, outline=Theme.BORDER, width=ui_dpi.S(2))
         self.angle = (self.angle - 8) % 360
         self.splash.after(40, self._animate)
 
@@ -4461,6 +4604,10 @@ def main():
     # 创建开始菜单快捷方式（仅首次运行）
     _create_start_menu_shortcut()
 
+    # 必须在任何窗口创建之前声明，之后 Windows 就不再对本进程做位图拉伸；
+    # 125%/150% 缩放屏上的字是不是"真像素"就取决于这一句有没有在 Tk() 之前跑到
+    ui_dpi.enable_dpi_awareness()
+
     # 先创建根窗口（不可见），用于承载SplashScreen
     # 优先使用TkinterDnD以支持拖拽
     if HAS_DND:
@@ -4477,7 +4624,9 @@ def main():
     except Exception:
         pass
 
-    # 显示加载动画
+    # 显示加载动画（先量屏幕，splash 才跟主窗口一样大）
+    ui_dpi.init(root)
+    logging.info("界面缩放: %s", ui_dpi.info())
     splash = SplashScreen(root)
     root.update()  # 确保splash立即渲染
 

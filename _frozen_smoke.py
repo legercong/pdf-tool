@@ -29,6 +29,10 @@ def main():
 
     ok = True
 
+    from pdf_page_remover import ui_dpi
+    # 必须在任何 Tk 窗口出现之前声明，否则这个进程这辈子都被 Windows 位图拉伸着
+    awareness = ui_dpi.enable_dpi_awareness()
+
     def imports():
         import pymupdf, numpy, cv2  # noqa
         from PIL import Image, ImageDraw  # noqa
@@ -59,6 +63,27 @@ def main():
         assert os.path.exists(png), "缺 icon.png: " + png
         return "ico/png 随包就位"
     ok &= step("图标资源", icons)
+
+    def ui_scale():
+        from pdf_page_remover import gui
+        from pdf_page_remover import ui_dpi
+        from tkinterdnd2 import TkinterDnD
+        r = TkinterDnD.Tk()
+        r.withdraw()
+        try:
+            sc = ui_dpi.init(r)
+            body = ui_dpi.F(10)
+            assert isinstance(body[1], int) and body[1] < 0, "字号没按像素下发: %r" % (body,)
+            assert "YaHei" in body[0] or "雅黑" in body[0] or "DengXian" in body[0] or "等线" in body[0], \
+                "字体族回落到了 %s，中文会被宋体顶上去" % body[0]
+            w, h = gui._window_size(920, 1050)
+            aw, ah = ui_dpi.work_area()
+            if ah:
+                assert h <= ah and w <= aw, "窗口 %dx%d 超出可用屏幕 %dx%d" % (w, h, aw, ah)
+            return "awareness=%s 缩放=%.2f 正文=%s 窗口=%dx%d" % (awareness, sc, body[1], w, h)
+        finally:
+            r.destroy()
+    ok &= step("界面缩放", ui_scale)
 
     def cv2_ops():
         import numpy, cv2
